@@ -15,7 +15,9 @@ import {
   ExternalLink,
   Loader2,
   ChevronRight,
-  Info
+  Info,
+  Search,
+  X
 } from 'lucide-react'
 
 interface DBFolder {
@@ -31,6 +33,7 @@ interface DBDocument {
   status: string
   partially_scanned: boolean
   created_at: string
+  ocr_text: string | null
 }
 
 export default function FolderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -52,6 +55,16 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [deletingAll, setDeletingAll] = useState(false)
+
+  // Filter documents by name or content
+  const filteredDocs = documents.filter((doc) => {
+    const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
+    return nameMatch || contentMatch
+  })
 
   const loadData = useCallback(async () => {
     try {
@@ -81,7 +94,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       // Load documents
       const query = supabase
         .from('documents')
-        .select('id, file_name, file_type, status, partially_scanned, created_at')
+        .select('id, file_name, file_type, status, partially_scanned, created_at, ocr_text')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -182,6 +195,30 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     }
   }
 
+  // Handle Delete All Documents in Uncategorized/Folder
+  const handleDeleteAllDocs = async () => {
+    if (!confirm('Are you sure you want to delete ALL documents in this folder? This action cannot be undone.')) return
+    setDeletingAll(true)
+
+    try {
+      const response = await fetch(`/api/folders/${id}/documents`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete documents')
+      }
+
+      setDocuments([])
+      setSearchQuery('')
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setDeletingAll(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-20 text-zinc-400">
@@ -256,8 +293,19 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           {renameError && <p className="text-red-400 text-xs mt-1">{renameError}</p>}
         </div>
 
-        {/* Delete button (only custom folders) */}
-        {!isUncategorized && (
+        {/* Delete actions */}
+        {isUncategorized ? (
+          documents.length > 0 && (
+            <button
+              onClick={handleDeleteAllDocs}
+              disabled={deletingAll}
+              className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{deletingAll ? 'Deleting All...' : 'Delete All Docs'}</span>
+            </button>
+          )
+        ) : (
           <button
             onClick={() => setIsDeleting(true)}
             className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
@@ -268,26 +316,48 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
         )}
       </div>
 
+      {/* Search Input Bar */}
+      <div className="relative max-w-xl">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-500">
+          <Search className="w-5 h-5" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search this folder by name or content..."
+          className="block w-full pl-11 pr-10 py-2.5 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* List of Documents */}
       <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden">
         <div className="p-5 border-b border-zinc-850 flex items-center justify-between">
           <h2 className="font-semibold text-zinc-300">Documents in this folder</h2>
           <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
-            {documents.length} files
+            {filteredDocs.length} files
           </span>
         </div>
 
-        {documents.length === 0 ? (
+        {filteredDocs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center text-zinc-500">
             <FileText className="w-12 h-12 text-zinc-850 mb-3" />
             <p className="font-medium text-zinc-400">No documents found</p>
             <p className="text-xs text-zinc-600 mt-1 max-w-xs">
-              Upload documents on the main dashboard to have them auto-categorized here.
+              {searchQuery ? 'No documents match your search criteria.' : 'Upload documents on the main dashboard to have them auto-categorized here.'}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-zinc-900">
-            {documents.map((doc) => (
+            {filteredDocs.map((doc) => (
               <Link
                 key={doc.id}
                 href={`/dashboard/document/${doc.id}`}
@@ -360,10 +430,10 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl p-6">
             <h3 className="text-lg font-bold text-white mb-2">Delete Folder?</h3>
             
-            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-4 rounded-xl flex items-start space-x-3 mb-6">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start space-x-3 mb-6">
               <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <p className="text-xs leading-relaxed">
-                Deletions are permanent. However, documents within this folder will <strong>not</strong> be deleted; they will simply be moved to <strong>Uncategorized</strong>.
+              <p className="text-xs leading-relaxed font-semibold">
+                WARNING: Deletions are permanent. Deleting this folder will permanently delete ALL documents inside it from the database and storage. This cannot be undone.
               </p>
             </div>
             

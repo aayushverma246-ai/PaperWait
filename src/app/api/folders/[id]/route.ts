@@ -55,15 +55,51 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params
 
   try {
-    // Delete folder - documents folder_id is set to NULL automatically by Postgres on delete set null
-    const { error } = await supabase
+    // 1. Fetch all documents in the folder first
+    const { data: docs, error: fetchErr } = await supabase
+      .from('documents')
+      .select('id, storage_path')
+      .eq('folder_id', id)
+      .eq('user_id', user.id)
+
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    }
+
+    if (docs && docs.length > 0) {
+      const storagePaths = docs.map((d) => d.storage_path)
+      const docIds = docs.map((d) => d.id)
+
+      // 2. Delete from Supabase Storage
+      const { error: storageError } = await supabase.storage
+        .from('documents')
+        .remove(storagePaths)
+
+      if (storageError) {
+        console.error('Failed to delete files from storage:', storageError)
+      }
+
+      // 3. Delete from DB documents table
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .in('id', docIds)
+        .eq('user_id', user.id)
+
+      if (dbError) {
+        return NextResponse.json({ error: dbError.message }, { status: 500 })
+      }
+    }
+
+    // 4. Delete the folder
+    const { error: folderError } = await supabase
       .from('folders')
       .delete()
       .eq('id', id)
       .eq('user_id', user.id)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (folderError) {
+      return NextResponse.json({ error: folderError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

@@ -12,7 +12,9 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  Search,
+  X
 } from 'lucide-react'
 
 interface DBFolder {
@@ -27,6 +29,7 @@ interface DBDocument {
   folder_id: string | null
   status: string
   created_at: string
+  ocr_text?: string | null
 }
 
 interface UploadQueueItem {
@@ -52,6 +55,16 @@ export default function DashboardPage() {
   // Upload queue
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+
+  // Search query
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Filtered documents for search
+  const filteredDocs = documents.filter((doc) => {
+    const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
+    return nameMatch || contentMatch
+  })
 
   // Load data
   const loadData = useCallback(async () => {
@@ -225,168 +238,268 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Grid of Folders */}
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Your Folders</h2>
-        {loading ? (
-          <div className="flex items-center space-x-3 text-zinc-400 py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-            <span>Loading document folders...</span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {/* Special Card for Uncategorized */}
-            <Link
-              href="/dashboard/folder/uncategorized"
-              className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
-            >
-              <div className="flex items-start justify-between">
-                <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-zinc-700 transition-colors">
-                  <FolderOpen className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
-                </div>
-                <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
-                  {getDocCount(null)} docs
-                </span>
-              </div>
-              <div className="mt-8 flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-zinc-300 group-hover:text-white transition-colors">
-                    Uncategorized
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-1">Default landing folder</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all" />
-              </div>
-            </Link>
-
-            {/* Custom Folders */}
-            {folders.map((folder) => (
-              <Link
-                key={folder.id}
-                href={`/dashboard/folder/${folder.id}`}
-                className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-indigo-500/20 transition-colors">
-                    <FolderIcon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300" />
-                  </div>
-                  <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950 font-semibold px-2.5 py-1 rounded-full">
-                    {getDocCount(folder.id)} docs
-                  </span>
-                </div>
-                <div className="mt-8 flex items-center justify-between">
-                  <div className="pr-4 overflow-hidden">
-                    <h3 className="font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">
-                      {folder.name}
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-1 truncate">Created {new Date(folder.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </div>
-              </Link>
-            ))}
-          </div>
+      {/* Search Input Bar */}
+      <div className="relative max-w-xl">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-500">
+          <Search className="w-5 h-5" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search all documents by name or content..."
+          className="block w-full pl-11 pr-10 py-3 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
 
-      {/* Drag & Drop Upload Zone */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Upload Documents</h2>
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 text-center transition-all min-h-[250px] ${
-              isDragOver
-                ? 'border-indigo-500 bg-indigo-500/5'
-                : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/30'
-            }`}
-          >
-            <input
-              type="file"
-              id="file-upload"
-              multiple
-              accept="application/pdf,image/png,image/jpeg,image/jpg"
-              onChange={(e) => handleFilesSelected(e.target.files)}
-              className="hidden"
-            />
-            
-            <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
-              <UploadCloud className="w-8 h-8 text-indigo-400" />
-            </div>
-            
-            <h3 className="font-semibold text-zinc-200">Drag & Drop Files Here</h3>
-            <p className="text-xs text-zinc-500 max-w-sm mt-2">
-              Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
-            </p>
-            
-            <label
-              htmlFor="file-upload"
-              className="mt-6 inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
-            >
-              Browse Files
-            </label>
+      {searchQuery ? (
+        /* Search Results Mode */
+        <div>
+          <div className="flex items-center justify-between mb-4 border-b border-zinc-800/60 pb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
+              Search Results for "{searchQuery}"
+            </h2>
+            <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950/50 font-semibold px-2.5 py-1 rounded-full">
+              {filteredDocs.length} matches
+            </span>
           </div>
-        </div>
-
-        {/* Upload Queue Panel */}
-        <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-6 flex flex-col">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Processing Queue</h2>
-          {uploadQueue.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="w-10 h-10 text-zinc-700 mb-3" />
-              <p className="text-zinc-500 text-sm">No active uploads</p>
-              <p className="text-xs text-zinc-600 mt-1">Uploaded files will queue here.</p>
+          
+          {filteredDocs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center text-zinc-500 bg-zinc-900/10 border border-zinc-850 rounded-2xl">
+              <FileText className="w-12 h-12 text-zinc-800 mb-3" />
+              <p className="font-semibold text-zinc-400">No matching documents found</p>
+              <p className="text-xs text-zinc-600 mt-1 max-w-xs">
+                Try searching for a different keyword or file name.
+              </p>
             </div>
           ) : (
-            <div className="flex-1 space-y-4 max-h-[300px] overflow-y-auto pr-1">
-              {uploadQueue.map((item) => (
-                <div key={item.id} className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl space-y-2">
-                  <div className="flex items-start justify-between">
-                    <p className="text-xs text-zinc-300 font-medium truncate max-w-[180px]">{item.fileName}</p>
-                    {item.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                    {item.status === 'failed' && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
-                    {item.status !== 'done' && item.status !== 'failed' && (
-                      <Loader2 className="w-4 h-4 animate-spin text-indigo-500 flex-shrink-0" />
-                    )}
-                  </div>
-                  
-                  {/* Status Indicator */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-zinc-500 uppercase tracking-wider font-semibold">
-                      {item.status === 'uploading' && 'Uploading...'}
-                      {item.status === 'ocr' && 'Extracting text (OCR)...'}
-                      {item.status === 'categorizing' && 'Auto-categorizing...'}
-                      {item.status === 'done' && 'Processed'}
-                      {item.status === 'failed' && 'Failed'}
-                    </span>
-                  </div>
+            <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden divide-y divide-zinc-900">
+              {filteredDocs.map((doc) => {
+                const docFolder = folders.find((f) => f.id === doc.folder_id)
+                // Try to find context match snippet
+                let snippet = ''
+                if (doc.ocr_text) {
+                  const idx = doc.ocr_text.toLowerCase().indexOf(searchQuery.toLowerCase())
+                  if (idx !== -1) {
+                    const start = Math.max(0, idx - 30)
+                    const end = Math.min(doc.ocr_text.length, idx + 70)
+                    snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
+                  }
+                }
 
-                  {/* Progress bar simulation */}
-                  <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        item.status === 'uploading' ? 'w-1/4 bg-indigo-500' :
-                        item.status === 'ocr' ? 'w-2/3 bg-indigo-500' :
-                        item.status === 'categorizing' ? 'w-11/12 bg-indigo-500' :
-                        item.status === 'done' ? 'w-full bg-emerald-500' :
-                        'w-full bg-red-500'
-                      }`}
-                    />
-                  </div>
-
-                  {item.error && (
-                    <p className="text-[10px] text-red-400 mt-1 line-clamp-2 leading-relaxed">
-                      {item.error}
-                    </p>
-                  )}
-                </div>
-              ))}
+                return (
+                  <Link
+                    key={doc.id}
+                    href={`/dashboard/document/${doc.id}`}
+                    className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all animate-fade-in"
+                  >
+                    <div className="flex items-center space-x-4 min-w-0">
+                      <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
+                          {doc.file_name}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-500">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                            {docFolder ? docFolder.name : 'Uncategorized'}
+                          </span>
+                          <span className="text-zinc-700">•</span>
+                          <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                          {snippet && (
+                            <>
+                              <span className="text-zinc-700">•</span>
+                              <span className="italic text-[11px] text-zinc-400 max-w-[300px] sm:max-w-[450px] truncate">
+                                {snippet}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block flex-shrink-0" />
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        /* Normal Dashboard Mode */
+        <>
+          {/* Grid of Folders */}
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Your Folders</h2>
+            {loading ? (
+              <div className="flex items-center space-x-3 text-zinc-400 py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                <span>Loading document folders...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {/* Special Card for Uncategorized */}
+                <Link
+                  href="/dashboard/folder/uncategorized"
+                  className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-zinc-700 transition-colors">
+                      <FolderOpen className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
+                    </div>
+                    <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
+                      {getDocCount(null)} docs
+                    </span>
+                  </div>
+                  <div className="mt-8 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-zinc-300 group-hover:text-white transition-colors">
+                        Uncategorized
+                      </h3>
+                      <p className="text-xs text-zinc-500 mt-1">Default landing folder</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </Link>
+
+                {/* Custom Folders */}
+                {folders.map((folder) => (
+                  <Link
+                    key={folder.id}
+                    href={`/dashboard/folder/${folder.id}`}
+                    className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-indigo-500/20 transition-colors">
+                        <FolderIcon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300" />
+                      </div>
+                      <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950 font-semibold px-2.5 py-1 rounded-full">
+                        {getDocCount(folder.id)} docs
+                      </span>
+                    </div>
+                    <div className="mt-8 flex items-center justify-between">
+                      <div className="pr-4 overflow-hidden">
+                        <h3 className="font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">
+                          {folder.name}
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-1 truncate">Created {new Date(folder.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Drag & Drop Upload Zone */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Upload Documents</h2>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 text-center transition-all min-h-[250px] ${
+                  isDragOver
+                    ? 'border-indigo-500 bg-indigo-500/5'
+                    : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/30'
+                }`}
+              >
+                <input
+                  type="file"
+                  id="file-upload"
+                  multiple
+                  accept="application/pdf,image/png,image/jpeg,image/jpg"
+                  onChange={(e) => handleFilesSelected(e.target.files)}
+                  className="hidden"
+                />
+                
+                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
+                  <UploadCloud className="w-8 h-8 text-indigo-400" />
+                </div>
+                
+                <h3 className="font-semibold text-zinc-200">Drag & Drop Files Here</h3>
+                <p className="text-xs text-zinc-500 max-w-sm mt-2">
+                  Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
+                </p>
+                
+                <label
+                  htmlFor="file-upload"
+                  className="mt-6 inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
+                >
+                  Browse Files
+                </label>
+              </div>
+            </div>
+
+            {/* Upload Queue Panel */}
+            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-6 flex flex-col">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Processing Queue</h2>
+              {uploadQueue.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
+                  <FileText className="w-10 h-10 text-zinc-700 mb-3" />
+                  <p className="text-zinc-500 text-sm">No active uploads</p>
+                  <p className="text-xs text-zinc-600 mt-1">Uploaded files will queue here.</p>
+                </div>
+              ) : (
+                <div className="flex-1 space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                  {uploadQueue.map((item) => (
+                    <div key={item.id} className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl space-y-2">
+                      <div className="flex items-start justify-between">
+                        <p className="text-xs text-zinc-300 font-medium truncate max-w-[180px]">{item.fileName}</p>
+                        {item.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                        {item.status === 'failed' && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                        {item.status !== 'done' && item.status !== 'failed' && (
+                          <Loader2 className="w-4 h-4 animate-spin text-indigo-500 flex-shrink-0" />
+                        )}
+                      </div>
+                      
+                      {/* Status Indicator */}
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-zinc-500 uppercase tracking-wider font-semibold">
+                          {item.status === 'uploading' && 'Uploading...'}
+                          {item.status === 'ocr' && 'Extracting text (OCR)...'}
+                          {item.status === 'categorizing' && 'Auto-categorizing...'}
+                          {item.status === 'done' && 'Processed'}
+                          {item.status === 'failed' && 'Failed'}
+                        </span>
+                      </div>
+
+                      {/* Progress bar simulation */}
+                      <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 ${
+                            item.status === 'uploading' ? 'w-1/4 bg-indigo-500' :
+                            item.status === 'ocr' ? 'w-2/3 bg-indigo-500' :
+                            item.status === 'categorizing' ? 'w-11/12 bg-indigo-500' :
+                            item.status === 'done' ? 'w-full bg-emerald-500' :
+                            'w-full bg-red-500'
+                          }`}
+                        />
+                      </div>
+
+                      {item.error && (
+                        <p className="text-[10px] text-red-400 mt-1 line-clamp-2 leading-relaxed">
+                          {item.error}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* New Folder Modal */}
       {isCreatingFolder && (
