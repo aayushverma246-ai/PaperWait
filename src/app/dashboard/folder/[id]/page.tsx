@@ -331,12 +331,10 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#09090b] flex items-center justify-center">
-        <VelocityLoader
-          title="Loading Folder"
-          subtitle="Decrypting catalog components..."
-        />
-      </div>
+      <VelocityLoader
+        title="Loading Folder"
+        subtitle="Decrypting catalog components..."
+      />
     )
   }
 

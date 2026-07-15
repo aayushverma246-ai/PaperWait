@@ -459,12 +459,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#09090b] flex items-center justify-center">
-        <VelocityLoader
-          title="Loading Dashboard"
-          subtitle="Decrypting catalog structure..."
-        />
-      </div>
+      <VelocityLoader
+        title="Loading Dashboard"
+        subtitle="Decrypting catalog structure..."
+      />
     )
   }
 
