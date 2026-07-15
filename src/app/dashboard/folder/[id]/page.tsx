@@ -34,6 +34,7 @@ interface DBDocument {
   partially_scanned: boolean
   created_at: string
   ocr_text: string | null
+  description: string | null
 }
 
 function highlightText(text: string, highlight: string) {
@@ -81,11 +82,12 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingAll, setDeletingAll] = useState(false)
 
-  // Filter documents by name or content
+  // Filter documents by name or content or description
   const filteredDocs = documents.filter((doc) => {
     const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
     const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
-    return nameMatch || contentMatch
+    const descMatch = doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase())
+    return nameMatch || contentMatch || descMatch
   })
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -166,7 +168,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       // Load documents
       const query = supabase
         .from('documents')
-        .select('id, file_name, file_type, status, partially_scanned, created_at, ocr_text')
+        .select('id, file_name, file_type, status, partially_scanned, created_at, ocr_text, description')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -530,6 +532,14 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                             const start = Math.max(0, idx - 20)
                             const end = Math.min(doc.ocr_text.length, idx + 50)
                             snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
+                          }
+                        }
+                        if (searchQuery && !snippet && doc.description) {
+                          const idx = doc.description.toLowerCase().indexOf(searchQuery.toLowerCase())
+                          if (idx !== -1) {
+                            const start = Math.max(0, idx - 20)
+                            const end = Math.min(doc.description.length, idx + 50)
+                            snippet = (start > 0 ? '...' : '') + doc.description.substring(start, end).replace(/\n/g, ' ') + (end < doc.description.length ? '...' : '')
                           }
                         }
                         return snippet ? (

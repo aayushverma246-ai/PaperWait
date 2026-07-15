@@ -40,6 +40,7 @@ interface UploadQueueItem {
   fileName: string
   status: 'uploading' | 'ocr' | 'categorizing' | 'done' | 'failed'
   error?: string
+  folderName?: string
 }
 
 function highlightText(text: string, highlight: string) {
@@ -88,7 +89,8 @@ export default function DashboardPage() {
   const filteredDocs = documents.filter((doc) => {
     const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
     const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
-    return nameMatch || contentMatch
+    const descMatch = doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase())
+    return nameMatch || contentMatch || descMatch
   })
 
   // Camera Capture state & handlers
@@ -367,10 +369,25 @@ export default function DashboardPage() {
         throw new Error(result.error || 'Failed to process document')
       }
 
-      updateItemStatus('done')
-      
-      // Reload dashboard data to show folder updates and new documents
+      // Reload dashboard data first
       await loadData()
+
+      // Look up folder name
+      let destFolderName = 'Uncategorized'
+      if (result.folder_id) {
+        const { data: latestFolder } = await supabase
+          .from('folders')
+          .select('name')
+          .eq('id', result.folder_id)
+          .single()
+        if (latestFolder) {
+          destFolderName = latestFolder.name
+        }
+      }
+
+      setUploadQueue((prev) =>
+        prev.map((item) => (item.id === queueId ? { ...item, status: 'done', folderName: destFolderName } : item))
+      )
     } catch (err: any) {
       updateItemStatus('failed', err.message || 'An error occurred during processing')
     }
@@ -516,6 +533,14 @@ export default function DashboardPage() {
                     const start = Math.max(0, idx - 30)
                     const end = Math.min(doc.ocr_text.length, idx + 70)
                     snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
+                  }
+                }
+                if (!snippet && doc.description) {
+                  const idx = doc.description.toLowerCase().indexOf(searchQuery.toLowerCase())
+                  if (idx !== -1) {
+                    const start = Math.max(0, idx - 30)
+                    const end = Math.min(doc.description.length, idx + 70)
+                    snippet = (start > 0 ? '...' : '') + doc.description.substring(start, end).replace(/\n/g, ' ') + (end < doc.description.length ? '...' : '')
                   }
                 }
 
