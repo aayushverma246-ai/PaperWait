@@ -1,9 +1,11 @@
 import { createCanvas } from '@napi-rs/canvas'
 
 // Use require for pdfjs legacy build to prevent Node CJS/ESM issues in Next.js compilation
-let pdfjs: any
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
+
 if (typeof window === 'undefined') {
-  pdfjs = require('pdfjs-dist/legacy/build/pdf.mjs')
+  // Set workerSrc to a valid CDN URL. Combined with disableWorker: true, this satisfies the library type checks without actually fetching the URL.
+  pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@6.1.200/legacy/build/pdf.worker.min.mjs'
 }
 
 interface ProcessedPdf {
@@ -25,7 +27,8 @@ export async function rasterizePdf(pdfBuffer: Buffer, maxPages = 10): Promise<Pr
     data,
     useSystemFonts: true,
     disableFontFace: true,
-  })
+    disableWorker: true,
+  } as any)
   
   const pdf = await loadingTask.promise
   const numPages = pdf.numPages
@@ -42,8 +45,9 @@ export async function rasterizePdf(pdfBuffer: Buffer, maxPages = 10): Promise<Pr
     const context = canvas.getContext('2d')
 
     await page.render({
-      canvasContext: context,
+      canvasContext: context as any,
       viewport: viewport,
+      canvas: canvas as any,
     }).promise
 
     const buffer = canvas.toBuffer('image/png')
