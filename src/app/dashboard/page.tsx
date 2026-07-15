@@ -282,7 +282,7 @@ export default function DashboardPage() {
 
       if (docsData && docsData.length > 0) {
         const paths = docsData.map((d: any) =>
-          d.file_type === 'application/pdf' || /\.pdf$/i.test(d.file_name)
+          d.file_type?.startsWith('image/') || d.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(d.file_name)
             ? `previews/${d.id}.png`
             : d.storage_path
         )
@@ -294,7 +294,7 @@ export default function DashboardPage() {
           
           if (signedUrls) {
             docsWithUrls = docsData.map((doc: any) => {
-              const targetPath = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.file_name)
+              const targetPath = doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)
                 ? `previews/${doc.id}.png`
                 : doc.storage_path
               const match = signedUrls.find((s) => s.path === targetPath)
@@ -613,7 +613,7 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      {doc.signedUrl && (doc.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(doc.file_name)) ? (
+                      {doc.signedUrl && (doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)) ? (
                         <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-indigo-500/20 transition-all flex items-center justify-center">
                           <img
                             src={doc.signedUrl}

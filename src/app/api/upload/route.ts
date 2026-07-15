@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { rasterizePdf, performOcr, classifyDocument, generateSummary, generateSummaryFromImage } from '@/utils/ai'
+import { createCanvas, loadImage } from '@napi-rs/canvas'
 
 export const maxDuration = 60 // Allow up to 60s execution on Vercel Pro/Enterprise if needed, though usually much faster
 
@@ -181,6 +182,42 @@ export async function POST(request: NextRequest) {
           console.log(`Uploaded PDF preview for document ${documentId}`)
         } catch (previewErr) {
           console.error('Failed to upload PDF preview thumbnail:', previewErr)
+        }
+      }
+
+      // If Image, upload a small compressed thumbnail to previews
+      if (fileType.startsWith('image/')) {
+        try {
+          const img = await loadImage(buffer)
+          const maxDim = 120
+          let width = img.width
+          let height = img.height
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width)
+              width = maxDim
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height)
+              height = maxDim
+            }
+          }
+
+          const canvas = createCanvas(width, height)
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          const previewBuffer = canvas.toBuffer('image/png')
+
+          await supabase.storage
+            .from('documents')
+            .upload(`previews/${documentId}.png`, previewBuffer, {
+              contentType: 'image/png',
+              upsert: true,
+            })
+          console.log(`Generated thumbnail preview for image ${documentId}`)
+        } catch (imgPreviewErr) {
+          console.error('Failed to generate image preview thumbnail:', imgPreviewErr)
         }
       }
 
