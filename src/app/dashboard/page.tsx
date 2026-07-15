@@ -32,6 +32,7 @@ interface DBDocument {
   status: string
   created_at: string
   ocr_text?: string | null
+  description?: string | null
 }
 
 interface UploadQueueItem {
@@ -691,6 +692,105 @@ export default function DashboardPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent/All Documents list with multi-select */}
+          <div className="mt-12 space-y-4">
+            <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden">
+              <div className="p-5 border-b border-zinc-850 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {documents.length > 0 && (
+                    <div
+                      onClick={() => {
+                        const allSelected = documents.length > 0 && documents.every(doc => selectedIds.has(doc.id))
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev)
+                          if (allSelected) {
+                            documents.forEach(doc => next.delete(doc.id))
+                          } else {
+                            documents.forEach(doc => next.add(doc.id))
+                          }
+                          return next
+                        })
+                      }}
+                      className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                        documents.length > 0 && documents.every(doc => selectedIds.has(doc.id))
+                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
+                      }`}
+                    >
+                      {documents.length > 0 && documents.every(doc => selectedIds.has(doc.id)) && (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                  <h2 className="font-semibold text-zinc-300">All Documents</h2>
+                </div>
+                <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
+                  {documents.length} files
+                </span>
+              </div>
+
+              {documents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-500">
+                  <FileText className="w-12 h-12 text-zinc-850 mb-3" />
+                  <p className="font-semibold text-zinc-400">No documents found</p>
+                  <p className="text-xs text-zinc-650 mt-1">
+                    Upload documents above to see them list here.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-900">
+                  {documents.map((doc) => {
+                    const docFolder = folders.find((f) => f.id === doc.folder_id)
+                    return (
+                      <Link
+                        key={doc.id}
+                        href={`/dashboard/document/${doc.id}`}
+                        className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all"
+                      >
+                        <div className="flex items-center space-x-4 min-w-0">
+                          {/* Checkbox Select */}
+                          <div
+                            onClick={(e) => toggleSelect(doc.id, e)}
+                            className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                              selectedIds.has(doc.id)
+                                ? 'bg-indigo-600 border-indigo-500 text-white'
+                                : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
+                            }`}
+                          >
+                            {selectedIds.has(doc.id) && (
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+
+                          <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
+                              {doc.file_name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-500">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                {docFolder ? docFolder.name : 'Uncategorized'}
+                              </span>
+                              <span className="text-zinc-700">•</span>
+                              <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block flex-shrink-0" />
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
             </div>

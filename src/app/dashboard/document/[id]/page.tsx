@@ -30,6 +30,7 @@ interface DBDocument {
   file_type: string
   storage_path: string
   ocr_text: string | null
+  description: string | null
   status: string
   folder_id: string | null
   partially_scanned: boolean
@@ -320,44 +321,25 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>
 
-          {/* OCR text display */}
-          <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl overflow-hidden flex flex-col flex-1 min-h-[300px]">
+          {/* What is this document for */}
+          <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl overflow-hidden flex flex-col flex-1 min-h-[250px]">
             <div className="p-4 border-b border-zinc-850 bg-zinc-950/60 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <FolderOpen className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Extracted OCR Text</span>
+                <FileText className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Document Purpose</span>
               </div>
-              
-              {document.ocr_text && (
-                <button
-                  onClick={handleCopyText}
-                  className="flex items-center space-x-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors cursor-pointer"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-500">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Text</span>
-                    </>
-                  )}
-                </button>
-              )}
             </div>
 
-            <div className="flex-1 p-5 bg-zinc-950/40 overflow-y-auto max-h-[350px]">
-              {document.ocr_text ? (
-                <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap select-text">
-                  {document.ocr_text}
-                </pre>
-              ) : (
-                <div className="h-full flex items-center justify-center text-center text-zinc-600">
-                  <p className="text-xs">No text extracted. Document may have failed scan.</p>
+            <div className="flex-1 p-6 bg-zinc-950/40 flex flex-col justify-center text-center">
+              <div className="max-w-md mx-auto space-y-4">
+                <div className="inline-flex items-center justify-center p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/10">
+                  <FileText className="w-6 h-6" />
                 </div>
-              )}
+                <h3 className="text-zinc-200 font-bold text-lg">What is this document for?</h3>
+                <p className="text-zinc-400 text-sm leading-relaxed italic">
+                  "{document.description || 'This document has been processed and indexed for global searches.'}"
+                </p>
+              </div>
             </div>
           </div>
 

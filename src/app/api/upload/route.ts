@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { rasterizePdf, performOcr, classifyDocument } from '@/utils/ai'
+import { rasterizePdf, performOcr, classifyDocument, generateSummary } from '@/utils/ai'
 
 export const maxDuration = 60 // Allow up to 60s execution on Vercel Pro/Enterprise if needed, though usually much faster
 
@@ -136,12 +136,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 3.5 Generate summary/description of what the document is for
+      const description = await generateSummary(ocrText)
+
       // 4. Update document status to done
       const { data: updatedDoc, error: updateError } = await supabase
         .from('documents')
         .update({
           status: 'done',
           ocr_text: ocrText,
+          description: description,
           folder_id: targetFolderId,
           partially_scanned: partiallyScanned,
         })

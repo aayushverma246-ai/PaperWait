@@ -216,3 +216,52 @@ Rules:
     }
   }
 }
+
+/**
+ * Generates a 1-sentence friendly description of "what this photo/document is for" using Llama LLM.
+ */
+export async function generateSummary(ocrText: string): Promise<string> {
+  const apiKey = process.env.NVIDIA_API_KEY_LLM
+  if (!apiKey) {
+    throw new Error('NVIDIA_API_KEY_LLM is not defined in environment')
+  }
+
+  const truncatedText = ocrText.slice(0, 3000)
+
+  const systemPrompt = `You are a document analyzer. Read the extracted text from a photo/document and explain what the photo/document is for in exactly one clear, friendly sentence.
+Be concise, professional, and start directly with the description (e.g. "This is a billing invoice from Comcast detailing broadband services for June 2026." or "This is a photo of a restaurant receipt for a business lunch at Olive Garden.").
+Do not include any conversational intro, meta commentary, or formatting.`
+
+  const userPrompt = `Document text content:\n${truncatedText}`
+
+  try {
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'meta/llama-3.1-8b-instruct',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.1,
+        top_p: 0.7,
+        max_tokens: 256,
+        stream: false,
+      }),
+    })
+
+    if (!response.ok) {
+      return 'Extracted document scan content.'
+    }
+
+    const resJson = await response.json()
+    return resJson.choices?.[0]?.message?.content?.trim() || 'Extracted document scan content.'
+  } catch (err) {
+    console.error('Error generating summary:', err)
+    return 'Extracted document scan content.'
+  }
+}
