@@ -2,10 +2,14 @@ import { createCanvas } from '@napi-rs/canvas'
 
 // Use require for pdfjs legacy build to prevent Node CJS/ESM issues in Next.js compilation
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { pathToFileURL } from 'url'
+import path from 'path'
 
 if (typeof window === 'undefined') {
-  // Set workerSrc to a valid CDN URL. Combined with disableWorker: true, this satisfies the library type checks without actually fetching the URL.
-  pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@6.1.200/legacy/build/pdf.worker.min.mjs'
+  // Convert local worker path to a file:// URL scheme.
+  // We use process.cwd() to dynamically resolve the path at runtime rather than require.resolve (which Turbopack compiles to a numeric module ID).
+  const workerPath = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs')
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href
 }
 
 interface ProcessedPdf {
