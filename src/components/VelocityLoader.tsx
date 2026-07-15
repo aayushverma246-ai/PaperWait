@@ -63,13 +63,6 @@ export default function VelocityLoader({
           X-RAY DELTA 4.0 // VECTOR PROTOCOL
         </div>
       </div>
-
-      {/* Decorative Top Right CPU detail */}
-      <div className="absolute top-10 right-10 text-right opacity-35 hidden sm:block font-mono text-[9px] text-zinc-400">
-        <div className="font-bold uppercase tracking-widest">
-          LATENCY: 14ms
-        </div>
-      </div>
     </div>
   )
 }

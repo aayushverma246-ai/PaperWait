@@ -190,7 +190,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       if (docsData && docsData.length > 0) {
         const paths = docsData.map((d: any) =>
           d.file_type?.startsWith('image/') || d.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(d.file_name)
-            ? `previews/${d.id}.png`
+            ? `${user.id}/previews/${d.id}.png`
             : d.storage_path
         )
 
@@ -202,7 +202,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           if (signedUrls) {
             docsWithUrls = docsData.map((doc: any) => {
               const targetPath = doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)
-                ? `previews/${doc.id}.png`
+                ? `${user.id}/previews/${doc.id}.png`
                 : doc.storage_path
               const match = signedUrls.find((s) => s.path === targetPath)
               return {

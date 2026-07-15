@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
           const previewBuffer = Buffer.from(base64Data, 'base64')
           await supabase.storage
             .from('documents')
-            .upload(`previews/${documentId}.png`, previewBuffer, {
+            .upload(`${user.id}/previews/${documentId}.png`, previewBuffer, {
               contentType: 'image/png',
               upsert: true,
             })
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
 
           await supabase.storage
             .from('documents')
-            .upload(`previews/${documentId}.png`, previewBuffer, {
+            .upload(`${user.id}/previews/${documentId}.png`, previewBuffer, {
               contentType: 'image/png',
               upsert: true,
             })
