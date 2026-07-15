@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PaperWeight - Intelligent Document Organizer",
+  title: "PaperWeights - Intelligent Document Organizer",
   description: "Organize your documents intelligently with Nemotron OCR and LLM auto-categorization.",
 };
 

@@ -36,6 +36,28 @@ interface DBDocument {
   ocr_text: string | null
 }
 
+function highlightText(text: string, highlight: string) {
+  if (!highlight.trim()) {
+    return <span>{text}</span>
+  }
+  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escapedHighlight})`, 'gi')
+  const parts = text.split(regex)
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-bold">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
+  )
+}
+
 export default function FolderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params)
   const router = useRouter()
@@ -231,66 +253,68 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="space-y-8">
       {/* Back button & header bar */}
-      <div className="flex items-center space-x-4">
-        <Link
-          href="/dashboard"
-          className="p-2 border border-zinc-800 bg-zinc-900/40 rounded-xl text-zinc-400 hover:text-zinc-200 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-3">
-            <span className="text-zinc-500 font-semibold text-xs uppercase tracking-wider">Folder</span>
-            {isUncategorized && (
-              <span className="text-xs font-semibold px-2 py-0.5 bg-zinc-850 text-zinc-400 border border-zinc-800 rounded-full">
-                System Default
-              </span>
-            )}
-          </div>
-          {isRenaming ? (
-            <form onSubmit={handleRename} className="flex items-center space-x-3 mt-1 max-w-md">
-              <input
-                type="text"
-                required
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-              />
-              <button
-                type="submit"
-                disabled={renameSubmitting}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                {renameSubmitting ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRenaming(false)
-                  setRenameValue(folder?.name || '')
-                  setRenameError('')
-                }}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <div className="flex items-center space-x-3 mt-1">
-              <h1 className="text-3xl font-extrabold tracking-tight text-white truncate">
-                {folder?.name}
-              </h1>
-              {!isUncategorized && (
-                <button
-                  onClick={() => setIsRenaming(true)}
-                  className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors rounded-lg hover:bg-zinc-900/50 cursor-pointer"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/60 pb-6">
+        <div className="flex items-center space-x-4 min-w-0">
+          <Link
+            href="/dashboard"
+            className="p-2 border border-zinc-800 bg-zinc-900/40 rounded-xl text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center space-x-3">
+              <span className="text-zinc-500 font-semibold text-xs uppercase tracking-wider">Folder</span>
+              {isUncategorized && (
+                <span className="text-xs font-semibold px-2 py-0.5 bg-zinc-850 text-zinc-400 border border-zinc-800 rounded-full">
+                  System Default
+                </span>
               )}
             </div>
-          )}
-          {renameError && <p className="text-red-400 text-xs mt-1">{renameError}</p>}
+            {isRenaming ? (
+              <form onSubmit={handleRename} className="flex items-center space-x-3 mt-1 max-w-md">
+                <input
+                  type="text"
+                  required
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+                <button
+                  type="submit"
+                  disabled={renameSubmitting}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  {renameSubmitting ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRenaming(false)
+                    setRenameValue(folder?.name || '')
+                    setRenameError('')
+                  }}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <div className="flex items-center space-x-3 mt-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white truncate">
+                  {folder?.name}
+                </h1>
+                {!isUncategorized && (
+                  <button
+                    onClick={() => setIsRenaming(true)}
+                    className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors rounded-lg hover:bg-zinc-900/50 cursor-pointer"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+            {renameError && <p className="text-red-400 text-xs mt-1">{renameError}</p>}
+          </div>
         </div>
 
         {/* Delete actions */}
@@ -369,7 +393,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                   </div>
                   <div className="min-w-0">
                     <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
-                      {doc.file_name}
+                      {highlightText(doc.file_name, searchQuery)}
                     </p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                       <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
@@ -388,6 +412,26 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                           </span>
                         </>
                       )}
+                      {(() => {
+                        // Context snippet
+                        let snippet = ''
+                        if (searchQuery && doc.ocr_text) {
+                          const idx = doc.ocr_text.toLowerCase().indexOf(searchQuery.toLowerCase())
+                          if (idx !== -1) {
+                            const start = Math.max(0, idx - 20)
+                            const end = Math.min(doc.ocr_text.length, idx + 50)
+                            snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
+                          }
+                        }
+                        return snippet ? (
+                          <>
+                            <span className="text-zinc-700 text-xs hidden sm:inline">•</span>
+                            <span className="italic text-[11px] text-zinc-400 max-w-[200px] sm:max-w-[350px] truncate">
+                              {highlightText(snippet, searchQuery)}
+                            </span>
+                          </>
+                        ) : null
+                      })()}
                     </div>
                   </div>
                 </div>

@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   FolderOpen,
   Search,
-  X
+  X,
+  Camera
 } from 'lucide-react'
 
 interface DBFolder {
@@ -37,6 +38,28 @@ interface UploadQueueItem {
   fileName: string
   status: 'uploading' | 'ocr' | 'categorizing' | 'done' | 'failed'
   error?: string
+}
+
+function highlightText(text: string, highlight: string) {
+  if (!highlight.trim()) {
+    return <span>{text}</span>
+  }
+  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escapedHighlight})`, 'gi')
+  const parts = text.split(regex)
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-bold">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
+  )
 }
 
 export default function DashboardPage() {
@@ -307,7 +330,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
-                          {doc.file_name}
+                          {highlightText(doc.file_name, searchQuery)}
                         </p>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-500">
                           <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
@@ -319,7 +342,7 @@ export default function DashboardPage() {
                             <>
                               <span className="text-zinc-700">•</span>
                               <span className="italic text-[11px] text-zinc-400 max-w-[300px] sm:max-w-[450px] truncate">
-                                {snippet}
+                                {highlightText(snippet, searchQuery)}
                               </span>
                             </>
                           )}
@@ -423,6 +446,15 @@ export default function DashboardPage() {
                   className="hidden"
                 />
                 
+                <input
+                  type="file"
+                  id="camera-upload"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleFilesSelected(e.target.files)}
+                  className="hidden"
+                />
+                
                 <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
                   <UploadCloud className="w-8 h-8 text-indigo-400" />
                 </div>
@@ -432,12 +464,21 @@ export default function DashboardPage() {
                   Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
                 </p>
                 
-                <label
-                  htmlFor="file-upload"
-                  className="mt-6 inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
-                >
-                  Browse Files
-                </label>
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                  <label
+                    htmlFor="file-upload"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
+                  >
+                    Browse Files
+                  </label>
+                  <label
+                    htmlFor="camera-upload"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Take Photo
+                  </label>
+                </div>
               </div>
             </div>
 
