@@ -209,7 +209,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2">
           {signedUrl && (
             <>
               <a
@@ -219,7 +219,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 className="flex items-center space-x-2 px-3 py-2 border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span className="hidden md:inline">Open Original</span>
+                <span className="inline">Open Original</span>
               </a>
               <button
                 onClick={handleDownload}
@@ -231,7 +231,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                <span className="inline">{downloading ? 'Downloading...' : 'Download'}</span>
               </button>
             </>
           )}
@@ -242,7 +242,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             title="Delete Document permanently"
           >
             <Trash2 className="w-4 h-4" />
-            <span className="hidden md:inline">Delete Document</span>
+            <span className="inline">Delete Document</span>
           </button>
         </div>
       </div>
@@ -254,19 +254,39 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl overflow-hidden flex flex-col h-[550px]">
           <div className="p-4 border-b border-zinc-850 bg-zinc-950/60 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Document Preview</span>
-            <span className="text-[10px] bg-zinc-800/80 text-zinc-400 font-semibold px-2 py-0.5 rounded uppercase">
-              {document.file_type.split('/')[1] || document.file_type}
-            </span>
+            <div className="flex items-center space-x-2">
+              {isPdf && signedUrl && (
+                <a
+                  href={signedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] bg-red-950/40 text-red-400 border border-red-950/50 hover:bg-red-600 hover:text-white font-semibold px-2.5 py-1 rounded transition-colors"
+                >
+                  Open Full PDF ↗
+                </a>
+              )}
+              <span className="text-[10px] bg-zinc-800/80 text-zinc-400 font-semibold px-2 py-0.5 rounded uppercase">
+                {document.file_type.split('/')[1] || document.file_type}
+              </span>
+            </div>
           </div>
 
-          <div className="flex-1 bg-zinc-950 flex items-center justify-center p-2">
+          <div className="flex-1 bg-zinc-950 flex items-center justify-center p-2 min-h-0">
             {signedUrl ? (
               isPdf ? (
-                <iframe
-                  src={`${signedUrl}#toolbar=0`}
-                  className="w-full h-full rounded-lg border-0"
-                  title="PDF Preview"
-                />
+                <div className="w-full h-full overflow-y-auto -webkit-overflow-scrolling-touch">
+                  <object
+                    data={signedUrl}
+                    type="application/pdf"
+                    className="w-full h-full min-h-[480px] rounded-lg border-0"
+                  >
+                    <iframe
+                      src={`${signedUrl}#toolbar=0`}
+                      className="w-full h-full rounded-lg border-0"
+                      title="PDF Preview"
+                    />
+                  </object>
+                </div>
               ) : (
                 <img
                   src={signedUrl}

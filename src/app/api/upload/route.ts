@@ -99,45 +99,50 @@ export async function POST(request: NextRequest) {
         throw new Error(`Unsupported file type: ${fileType}`)
       }
 
-      // 3. Classify document into a folder
-      // Fetch user's existing folders
-      const { data: folders, error: foldersError } = await supabase
-        .from('folders')
-        .select('id, name')
-        .eq('user_id', user.id)
-
-      if (foldersError) {
-        throw new Error(`Failed to fetch folders: ${foldersError.message}`)
-      }
-
-      const folderNames = folders?.map((f) => f.name) || []
-      const classification = await classifyDocument(ocrText, folderNames)
-
+      const manualFolderId = formData.get('folderId') as string | null
       let targetFolderId: string | null = null
 
-      if (classification.folder_name && classification.folder_name.toLowerCase() !== 'uncategorized') {
-        // Try to match existing folder case-insensitively
-        const matchedFolder = folders?.find(
-          (f) => f.name.toLowerCase() === classification.folder_name.toLowerCase()
-        )
+      if (manualFolderId && manualFolderId !== 'auto') {
+        targetFolderId = manualFolderId === 'uncategorized' ? null : manualFolderId
+      } else {
+        // 3. Classify document into a folder
+        // Fetch user's existing folders
+        const { data: folders, error: foldersError } = await supabase
+          .from('folders')
+          .select('id, name')
+          .eq('user_id', user.id)
 
-        if (matchedFolder) {
-          targetFolderId = matchedFolder.id
-        } else {
-          // Create new folder
-          const { data: newFolder, error: createFolderError } = await supabase
-            .from('folders')
-            .insert({
-              user_id: user.id,
-              name: classification.folder_name,
-            })
-            .select()
-            .single()
+        if (foldersError) {
+          throw new Error(`Failed to fetch folders: ${foldersError.message}`)
+        }
 
-          if (createFolderError) {
-            console.error('Failed to create classified folder, falling back to Uncategorized:', createFolderError)
+        const folderNames = folders?.map((f) => f.name) || []
+        const classification = await classifyDocument(ocrText, folderNames)
+
+        if (classification.folder_name && classification.folder_name.toLowerCase() !== 'uncategorized') {
+          // Try to match existing folder case-insensitively
+          const matchedFolder = folders?.find(
+            (f) => f.name.toLowerCase() === classification.folder_name.toLowerCase()
+          )
+
+          if (matchedFolder) {
+            targetFolderId = matchedFolder.id
           } else {
-            targetFolderId = newFolder.id
+            // Create new folder
+            const { data: newFolder, error: createFolderError } = await supabase
+              .from('folders')
+              .insert({
+                user_id: user.id,
+                name: classification.folder_name,
+              })
+              .select()
+              .single()
+
+            if (createFolderError) {
+              console.error('Failed to create classified folder, falling back to Uncategorized:', createFolderError)
+            } else {
+              targetFolderId = newFolder.id
+            }
           }
         }
       }

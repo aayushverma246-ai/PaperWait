@@ -423,7 +423,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
             className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Delete Folder</span>
+            <span className="inline">Delete Folder</span>
           </button>
         )}
       </div>

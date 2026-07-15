@@ -85,6 +85,7 @@ export default function DashboardPage() {
   // Upload queue
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState('auto')
 
   // Search query
   const [searchQuery, setSearchQuery] = useState('')
@@ -378,6 +379,7 @@ export default function DashboardPage() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('folderId', uploadTargetFolderId)
 
       // Start upload & process. The endpoint performs OCR and LLM classification inline
       // We will simulate step transitions for better UI feel.
@@ -807,6 +809,25 @@ export default function DashboardPage() {
                 <p className="text-xs text-zinc-500 max-w-sm mt-2">
                   Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
                 </p>
+
+                {/* Destination Folder Selector */}
+                <div className="mt-5 flex flex-col items-center z-10">
+                  <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5">Destination Folder</label>
+                  <div className="relative">
+                    <select
+                      value={uploadTargetFolderId}
+                      onChange={(e) => setUploadTargetFolderId(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-850 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 appearance-none cursor-pointer pr-10 transition-all font-medium"
+                    >
+                      <option value="auto">⚡ Auto-categorize with AI</option>
+                      <option value="uncategorized">📁 Uncategorized</option>
+                      {folders.map((f) => (
+                        <option key={f.id} value={f.id}>📁 {f.name}</option>
+                      ))}
+                    </select>
+                    <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-zinc-500 text-[10px]">▼</span>
+                  </div>
+                </div>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                   <label
