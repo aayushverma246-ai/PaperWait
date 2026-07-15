@@ -19,6 +19,7 @@ import {
   Search,
   X
 } from 'lucide-react'
+import VelocityLoader from '@/components/VelocityLoader'
 
 interface DBFolder {
   id: string
@@ -183,30 +184,44 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       const { data: docsData, error: docsErr } = await query
       if (docsErr) throw docsErr
 
-      // Batch create signed URLs for image preview thumbnails
-      let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
-      
+      // Batch create signed URLs for image preview thumbnails asynchronously in the background
+      setDocuments((docsData || []).map((doc: any) => ({ ...doc, signedUrl: null })))
+      setSelectedIds(new Set())
+      setLoading(false)
+
       if (docsData && docsData.length > 0) {
-        const paths = docsData.map((d: any) => d.storage_path)
-        const { data: signedUrls } = await supabase.storage
+        const paths = docsData.map((d: any) =>
+          d.file_type === 'application/pdf' || /\.pdf$/i.test(d.file_name)
+            ? `previews/${d.id}.png`
+            : d.storage_path
+        )
+
+        supabase.storage
           .from('documents')
           .createSignedUrls(paths, 3600)
-        
-        docsWithUrls = docsData.map((doc: any) => {
-          const match = signedUrls?.find((s) => s.path === doc.storage_path)
-          return {
-            ...doc,
-            signedUrl: match ? match.signedUrl : null
-          }
-        })
+          .then(({ data: signedUrls }) => {
+            if (signedUrls) {
+              setDocuments((prev) =>
+                prev.map((doc) => {
+                  const targetPath = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.file_name)
+                    ? `previews/${doc.id}.png`
+                    : doc.storage_path
+                  const match = signedUrls.find((s) => s.path === targetPath)
+                  return {
+                    ...doc,
+                    signedUrl: match ? match.signedUrl : null
+                  }
+                })
+              )
+            }
+          })
+          .catch((err) => {
+            console.error('Background signed URL load failed:', err)
+          })
       }
-
-      setDocuments(docsWithUrls)
-      setSelectedIds(new Set())
     } catch (err) {
       console.error('Error loading folder page:', err)
       router.push('/dashboard')
-    } finally {
       setLoading(false)
     }
   }, [supabase, id, isUncategorized, router])
@@ -316,9 +331,11 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center py-20 text-zinc-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
-        <span>Loading folder details...</span>
+      <div className="flex items-center justify-center min-h-[500px] w-full">
+        <VelocityLoader
+          title="Loading Folder"
+          subtitle="Decrypting catalog components..."
+        />
       </div>
     )
   }

@@ -167,6 +167,23 @@ export async function POST(request: NextRequest) {
         throw new Error(`Failed to update document: ${updateError.message}`)
       }
 
+      // If PDF, upload first-page rasterized preview to storage
+      if (fileType === 'application/pdf' && summaryImageBase64) {
+        try {
+          const base64Data = summaryImageBase64.replace(/^data:image\/\w+;base64,/, '')
+          const previewBuffer = Buffer.from(base64Data, 'base64')
+          await supabase.storage
+            .from('documents')
+            .upload(`previews/${documentId}.png`, previewBuffer, {
+              contentType: 'image/png',
+              upsert: true,
+            })
+          console.log(`Uploaded PDF preview for document ${documentId}`)
+        } catch (previewErr) {
+          console.error('Failed to upload PDF preview thumbnail:', previewErr)
+        }
+      }
+
       return NextResponse.json(updatedDoc)
 
     } catch (processError: any) {

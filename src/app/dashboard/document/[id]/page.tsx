@@ -18,6 +18,7 @@ import {
   FolderOpen,
   Trash2
 } from 'lucide-react'
+import VelocityLoader from '@/components/VelocityLoader'
 
 interface DBFolder {
   id: string
@@ -175,9 +176,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center py-20 text-zinc-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
-        <span>Loading document details...</span>
+      <div className="flex items-center justify-center min-h-[500px] w-full">
+        <VelocityLoader
+          title="Loading Document"
+          subtitle="Decrypting secure document contents..."
+        />
       </div>
     )
   }

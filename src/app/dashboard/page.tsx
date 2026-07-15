@@ -18,6 +18,7 @@ import {
   Camera,
   Trash2
 } from 'lucide-react'
+import VelocityLoader from '@/components/VelocityLoader'
 
 interface DBFolder {
   id: string
@@ -275,31 +276,45 @@ export default function DashboardPage() {
 
       if (docsErr) throw docsErr
 
-      // Batch create signed URLs for image preview thumbnails
-      let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
-      
-      if (docsData && docsData.length > 0) {
-        const paths = docsData.map((d: any) => d.storage_path)
-        const { data: signedUrls } = await supabase.storage
-          .from('documents')
-          .createSignedUrls(paths, 3600)
-        
-        docsWithUrls = docsData.map((doc: any) => {
-          const match = signedUrls?.find((s) => s.path === doc.storage_path)
-          return {
-            ...doc,
-            signedUrl: match ? match.signedUrl : null
-          }
-        })
-      }
-
       setFolders(foldersData || [])
-      setDocuments(docsWithUrls)
+      setDocuments((docsData || []).map((doc: any) => ({ ...doc, signedUrl: null })))
       setSelectedIds(new Set())
       setSelectedFolderIds(new Set())
+      setLoading(false)
+
+      // Batch create signed URLs asynchronously in the background
+      if (docsData && docsData.length > 0) {
+        const paths = docsData.map((d: any) =>
+          d.file_type === 'application/pdf' || /\.pdf$/i.test(d.file_name)
+            ? `previews/${d.id}.png`
+            : d.storage_path
+        )
+
+        supabase.storage
+          .from('documents')
+          .createSignedUrls(paths, 3600)
+          .then(({ data: signedUrls }) => {
+            if (signedUrls) {
+              setDocuments((prev) =>
+                prev.map((doc) => {
+                  const targetPath = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.file_name)
+                    ? `previews/${doc.id}.png`
+                    : doc.storage_path
+                  const match = signedUrls.find((s) => s.path === targetPath)
+                  return {
+                    ...doc,
+                    signedUrl: match ? match.signedUrl : null
+                  }
+                })
+              )
+            }
+          })
+          .catch((err) => {
+            console.error('Background signed URL load failed:', err)
+          })
+      }
     } catch (err) {
       console.error('Error loading dashboard data:', err)
-    } finally {
       setLoading(false)
     }
   }, [supabase])
@@ -439,6 +454,17 @@ export default function DashboardPage() {
         uploadFile(file)
       })
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px] w-full">
+        <VelocityLoader
+          title="Loading Dashboard"
+          subtitle="Decrypting catalog structure..."
+        />
+      </div>
+    )
   }
 
   return (
@@ -679,13 +705,7 @@ export default function DashboardPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">Your Folders</h2>
             </div>
 
-            {loading ? (
-              <div className="flex items-center space-x-3 text-zinc-400 py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-                <span>Loading document folders...</span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {/* Special Card for Uncategorized */}
                 <Link
                   href="/dashboard/folder/uncategorized"
@@ -755,7 +775,6 @@ export default function DashboardPage() {
                   </Link>
                 ))}
               </div>
-            )}
           </div>
 
           {/* Drag & Drop Upload Zone */}
