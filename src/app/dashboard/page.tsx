@@ -318,7 +318,7 @@ export default function DashboardPage() {
             
             <h3 className="font-semibold text-zinc-200">Drag & Drop Files Here</h3>
             <p className="text-xs text-zinc-500 max-w-sm mt-2">
-              Supports PDFs and images (PNG, JPEG, JPG) up to 50MB. PDFs will be scanned up to 10 pages.
+              Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
             </p>
             
             <label

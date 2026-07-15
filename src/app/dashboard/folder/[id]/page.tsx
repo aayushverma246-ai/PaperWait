@@ -139,7 +139,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     }
   }
 
-  // Handle Delete
+  // Handle Delete Folder
   const handleDelete = async () => {
     setDeleteSubmitting(true)
 
@@ -159,6 +159,26 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       console.error('Delete folder failed:', err)
       setDeleteSubmitting(false)
       setIsDeleting(false)
+    }
+  }
+
+  // Handle Delete Document
+  const handleDeleteDoc = async (e: React.MouseEvent, docId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this document permanently?')) return
+
+    try {
+      const response = await fetch(`/api/documents/${docId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete document')
+      }
+      setDocuments((prev) => prev.filter((d) => d.id !== docId))
+    } catch (err: any) {
+      alert(err.message)
     }
   }
 
@@ -302,7 +322,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                   </div>
                 </div>
 
-                {/* Status Badge */}
+                {/* Status Badge & Actions */}
                 <div className="flex items-center justify-between sm:justify-end mt-4 sm:mt-0 space-x-4">
                   <span
                     className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold border ${
@@ -317,7 +337,16 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                     {doc.status === 'failed' && 'Failed'}
                     {doc.status === 'processing' && 'Processing...'}
                   </span>
-                  <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block" />
+                  
+                  <button
+                    onClick={(e) => handleDeleteDoc(e, doc.id)}
+                    className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-950/20 border border-transparent hover:border-red-900/30 rounded-lg transition-all cursor-pointer flex-shrink-0"
+                    title="Delete Document"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  
+                  <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block flex-shrink-0" />
                 </div>
               </Link>
             ))}

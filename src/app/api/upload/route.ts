@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
 
     try {
       if (fileType === 'application/pdf') {
-        // PDF processing
-        const rasterized = await rasterizePdf(buffer, 10)
+        // PDF processing - scan all pages (999999 limit)
+        const rasterized = await rasterizePdf(buffer, 999999)
         partiallyScanned = rasterized.partiallyScanned
         
         const pageTexts: string[] = []

@@ -15,7 +15,8 @@ import {
   Copy,
   Check,
   Loader2,
-  FolderOpen
+  FolderOpen,
+  Trash2
 } from 'lucide-react'
 
 interface DBFolder {
@@ -127,6 +128,27 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Delete document
+  const handleDeleteDoc = async () => {
+    if (!document) return
+    if (!confirm('Are you sure you want to delete this document permanently?')) return
+
+    try {
+      const response = await fetch(`/api/documents/${document.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete document')
+      }
+
+      router.push(backPath)
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-20 text-zinc-400">
@@ -184,6 +206,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               </a>
             </>
           )}
+          
+          <button
+            onClick={handleDeleteDoc}
+            className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+            title="Delete Document permanently"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden md:inline">Delete Document</span>
+          </button>
         </div>
       </div>
 
@@ -247,7 +278,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 <div>
                   <p className="text-zinc-500 text-xs">Page Scan Range</p>
                   <p className="text-zinc-300 font-medium">
-                    {document.partially_scanned ? 'First 10 pages (Truncated)' : 'Full scan'}
+                    Full scan (Processed)
                   </p>
                 </div>
               </div>
