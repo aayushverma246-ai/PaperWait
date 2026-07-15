@@ -48,6 +48,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const [loading, setLoading] = useState(true)
   const [moving, setMoving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -129,6 +130,28 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownload = async () => {
+    if (!signedUrl || !document) return
+    setDownloading(true)
+    try {
+      const res = await fetch(signedUrl)
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      a.download = document.file_name
+      window.document.body.appendChild(a)
+      a.click()
+      window.document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download failed:', err)
+      window.open(signedUrl, '_blank')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   // Delete document
   const handleDeleteDoc = async () => {
     if (!document) return
@@ -197,14 +220,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 <ExternalLink className="w-4 h-4" />
                 <span className="hidden md:inline">Open Original</span>
               </a>
-              <a
-                href={signedUrl}
-                download={document.file_name}
-                className="flex items-center space-x-2 px-3 py-2 border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold transition-all"
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="flex items-center space-x-2 px-3 py-2 border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
               >
-                <Download className="w-4 h-4" />
-                <span className="hidden md:inline">Download</span>
-              </a>
+                {downloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+              </button>
             </>
           )}
           
