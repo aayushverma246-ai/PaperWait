@@ -87,6 +87,11 @@ export default function DashboardPage() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState('auto')
 
+  // Conflict resolution states
+  const [duplicateFile, setDuplicateFile] = useState<File | null>(null)
+  const [duplicateExistingDoc, setDuplicateExistingDoc] = useState<DBDocument | null>(null)
+  const [pendingUploadsQueue, setPendingUploadsQueue] = useState<File[]>([])
+
   // Search query
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -361,12 +366,12 @@ export default function DashboardPage() {
   }
 
   // File upload logic
-  const uploadFile = async (file: File) => {
+  const uploadFile = async (file: File, replaceDocId?: string) => {
     const queueId = crypto.randomUUID()
     
     // Add to queue
     setUploadQueue((prev) => [
-      { id: queueId, fileName: file.name, status: 'uploading' },
+      { id: queueId, fileName: replaceDocId ? `${file.name} (Replacing)` : file.name, status: 'uploading' },
       ...prev,
     ])
 
@@ -380,6 +385,9 @@ export default function DashboardPage() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('folderId', uploadTargetFolderId)
+      if (replaceDocId) {
+        formData.append('replaceDocId', replaceDocId)
+      }
 
       // Start upload & process. The endpoint performs OCR and LLM classification inline
       // We will simulate step transitions for better UI feel.
@@ -432,11 +440,32 @@ export default function DashboardPage() {
     }
   }
 
+  const processUploadQueue = async (filesToUpload: File[]) => {
+    const nextPending = [...filesToUpload]
+    while (nextPending.length > 0) {
+      const file = nextPending.shift()!
+      if (!file) continue
+
+      // Check if file_name already exists in documents list
+      const existingDoc = documents.find(
+        (d) => d.file_name.toLowerCase() === file.name.toLowerCase()
+      )
+      if (existingDoc) {
+        // Pause and trigger conflict modal
+        setDuplicateFile(file)
+        setDuplicateExistingDoc(existingDoc)
+        setPendingUploadsQueue(nextPending)
+        return
+      }
+
+      // No duplicate, upload normally
+      await uploadFile(file)
+    }
+  }
+
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return
-    Array.from(files).forEach((file) => {
-      uploadFile(file)
-    })
+    processUploadQueue(Array.from(files))
   }
 
   // Drag and Drop handlers
@@ -453,9 +482,7 @@ export default function DashboardPage() {
     e.preventDefault()
     setIsDragOver(false)
     if (e.dataTransfer.files) {
-      Array.from(e.dataTransfer.files).forEach((file) => {
-        uploadFile(file)
-      })
+      processUploadQueue(Array.from(e.dataTransfer.files))
     }
   }
 
@@ -1010,6 +1037,91 @@ export default function DashboardPage() {
               >
                 <Camera className="w-4 h-4" />
                 <span>Capture Photo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate File Conflict Modal */}
+      {duplicateFile && duplicateExistingDoc && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-md px-4 animate-fade-in">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-6 space-y-6">
+            <div className="flex items-center space-x-3 text-red-400">
+              <AlertTriangle className="w-6 h-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-white">Duplicate File Detected</h3>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              A file named <strong className="text-zinc-200">"{duplicateFile.name}"</strong> already exists in your collection. What would you like to do?
+            </p>
+
+            <div className="flex flex-col space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const docToReplace = duplicateExistingDoc
+                  const fileToUpload = duplicateFile
+                  const nextQueue = [...pendingUploadsQueue]
+
+                  setDuplicateFile(null)
+                  setDuplicateExistingDoc(null)
+                  setPendingUploadsQueue([])
+
+                  uploadFile(fileToUpload, docToReplace.id)
+                  processUploadQueue(nextQueue)
+                }}
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-semibold rounded-xl text-xs transition-all shadow-md shadow-red-500/25 cursor-pointer text-center"
+              >
+                Replace Existing version
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const file = duplicateFile
+                  const nextQueue = [...pendingUploadsQueue]
+
+                  setDuplicateFile(null)
+                  setDuplicateExistingDoc(null)
+                  setPendingUploadsQueue([])
+
+                  const dotIndex = file.name.lastIndexOf('.')
+                  let baseName = file.name
+                  let extension = ''
+                  if (dotIndex !== -1) {
+                    baseName = file.name.substring(0, dotIndex)
+                    extension = file.name.substring(dotIndex)
+                  }
+                  
+                  let counter = 1
+                  let newName = `${baseName} (${counter})${extension}`
+                  while (documents.some(d => d.file_name.toLowerCase() === newName.toLowerCase())) {
+                    counter++
+                    newName = `${baseName} (${counter})${extension}`
+                  }
+
+                  const renamedFile = new File([file], newName, { type: file.type })
+                  uploadFile(renamedFile)
+                  processUploadQueue(nextQueue)
+                }}
+                className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white font-semibold rounded-xl text-xs border border-zinc-750 transition-all cursor-pointer text-center"
+              >
+                Keep Both (rename to copy)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nextQueue = [...pendingUploadsQueue]
+                  setDuplicateFile(null)
+                  setDuplicateExistingDoc(null)
+                  setPendingUploadsQueue([])
+                  processUploadQueue(nextQueue)
+                }}
+                className="w-full py-2.5 px-4 bg-transparent hover:bg-zinc-850/50 text-zinc-500 hover:text-zinc-300 font-semibold rounded-xl text-xs transition-all cursor-pointer text-center"
+              >
+                Skip Upload
               </button>
             </div>
           </div>

@@ -22,7 +22,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    const documentId = crypto.randomUUID()
+    const replaceDocId = formData.get('replaceDocId') as string | null
+    let documentId = crypto.randomUUID()
+    let isReplacing = false
+    let oldStoragePath = ''
+
+    if (replaceDocId) {
+      const { data: existingDoc, error: existingDocError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', replaceDocId)
+        .eq('user_id', user.id)
+        .single()
+      
+      if (existingDoc && !existingDocError) {
+        documentId = replaceDocId
+        isReplacing = true
+        oldStoragePath = existingDoc.storage_path
+      }
+    }
+
     const fileName = file.name
     const fileType = file.type
     const storagePath = `${user.id}/${documentId}/${fileName}`
@@ -44,25 +63,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Storage upload failed: ${storageError.message}` }, { status: 500 })
     }
 
-    // 2. Insert initial processing row in database
-    const { data: docData, error: insertError } = await supabase
-      .from('documents')
-      .insert({
-        id: documentId,
-        user_id: user.id,
-        file_name: fileName,
-        storage_path: storagePath,
-        file_type: fileType,
-        status: 'processing',
-        folder_id: null,
-        partially_scanned: false,
-      })
-      .select()
-      .single()
+    // Clean up old file if name/path changed
+    if (isReplacing && oldStoragePath && oldStoragePath !== storagePath) {
+      try {
+        await supabase.storage.from('documents').remove([oldStoragePath])
+      } catch (err) {
+        console.error('Failed to clean up old storage file:', err)
+      }
+    }
 
-    if (insertError) {
-      console.error('Database insert error:', insertError)
-      return NextResponse.json({ error: `Database entry creation failed: ${insertError.message}` }, { status: 500 })
+    // 2. Insert or update processing row in database
+    let docData
+    let dbError
+
+    if (isReplacing) {
+      const { data, error } = await supabase
+        .from('documents')
+        .update({
+          file_name: fileName,
+          storage_path: storagePath,
+          file_type: fileType,
+          status: 'processing',
+          ocr_text: null,
+          description: null,
+          partially_scanned: false,
+        })
+        .eq('id', documentId)
+        .select()
+        .single()
+      docData = data
+      dbError = error
+    } else {
+      const { data, error } = await supabase
+        .from('documents')
+        .insert({
+          id: documentId,
+          user_id: user.id,
+          file_name: fileName,
+          storage_path: storagePath,
+          file_type: fileType,
+          status: 'processing',
+          folder_id: null,
+          partially_scanned: false,
+        })
+        .select()
+        .single()
+      docData = data
+      dbError = error
+    }
+
+    if (dbError) {
+      console.error('Database execution error:', dbError)
+      return NextResponse.json({ error: `Database entry modification failed: ${dbError.message}` }, { status: 500 })
     }
 
     // Run processing
