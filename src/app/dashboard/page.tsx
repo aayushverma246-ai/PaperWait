@@ -58,7 +58,7 @@ function highlightText(text: string, highlight: string) {
     <span>
       {parts.map((part, i) =>
         regex.test(part) ? (
-          <mark key={i} className="bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-bold">
+          <mark key={i} className="bg-red-500/30 text-red-300 px-1 py-0.5 rounded font-bold">
             {part}
           </mark>
         ) : (
@@ -476,7 +476,7 @@ export default function DashboardPage() {
         </div>
         <button
           onClick={() => setIsCreatingFolder(true)}
-          className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-medium transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
+          className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-medium transition-all shadow-md shadow-red-500/20 cursor-pointer"
         >
           <Plus className="w-5 h-5" />
           <span>New Folder</span>
@@ -493,7 +493,7 @@ export default function DashboardPage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search all documents by name or content..."
-          className="block w-full pl-11 pr-10 py-3 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
+          className="block w-full pl-11 pr-10 py-3 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
         />
         {searchQuery && (
           <button
@@ -510,13 +510,13 @@ export default function DashboardPage() {
         <div>
           {/* Bulk actions banner */}
           {selectedIds.size > 0 && (
-            <div className="flex items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl mb-4 text-sm text-indigo-300 animate-fade-in">
+            <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/40 rounded-2xl mb-4 text-sm text-red-300 animate-fade-in">
               <div className="flex items-center space-x-3">
                 <span className="font-semibold text-zinc-200">{selectedIds.size} items selected</span>
                 <span className="text-zinc-600">•</span>
                 <button
                   onClick={() => setSelectedIds(new Set())}
-                  className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold"
+                  className="text-red-400 hover:text-red-200 transition-colors font-semibold"
                 >
                   Deselect All
                 </button>
@@ -539,7 +539,7 @@ export default function DashboardPage() {
                   onClick={toggleSelectAll}
                   className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                     isAllSelected
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
+                      ? 'bg-red-600 border-red-500 text-white'
                       : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
                   }`}
                 >
@@ -554,7 +554,7 @@ export default function DashboardPage() {
                 Search Results for "{searchQuery}"
               </h2>
             </div>
-            <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950/50 font-semibold px-2.5 py-1 rounded-full">
+            <span className="text-xs bg-red-950/40 text-red-400 border border-red-950/50 font-semibold px-2.5 py-1 rounded-full">
               {filteredDocs.length} matches
             </span>
           </div>
@@ -602,7 +602,7 @@ export default function DashboardPage() {
                         onClick={(e) => toggleSelect(doc.id, e)}
                         className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                           selectedIds.has(doc.id)
-                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            ? 'bg-red-600 border-red-500 text-white'
                             : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
                         }`}
                       >
@@ -614,7 +614,7 @@ export default function DashboardPage() {
                       </div>
 
                       {doc.signedUrl && (doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)) ? (
-                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-indigo-500/20 transition-all flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-red-500/20 transition-all flex items-center justify-center">
                           <img
                             src={doc.signedUrl}
                             alt={doc.file_name}
@@ -623,7 +623,7 @@ export default function DashboardPage() {
                           />
                         </div>
                       ) : (
-                        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
+                        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-red-400 group-hover:border-red-500/10 transition-all flex-shrink-0">
                           <FileText className="w-5 h-5" />
                         </div>
                       )}
@@ -660,13 +660,13 @@ export default function DashboardPage() {
         <>
           {/* Folders Selection actions banner */}
           {selectedFolderIds.size > 0 && (
-            <div className="flex items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl text-sm text-indigo-300 animate-fade-in mb-6">
+            <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/40 rounded-2xl text-sm text-red-300 animate-fade-in mb-6">
               <div className="flex items-center space-x-3">
                 <span className="font-semibold text-zinc-200">{selectedFolderIds.size} folders selected</span>
                 <span className="text-zinc-600">•</span>
                 <button
                   onClick={() => setSelectedFolderIds(new Set())}
-                  className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold"
+                  className="text-red-400 hover:text-red-200 transition-colors font-semibold"
                 >
                   Deselect All
                 </button>
@@ -690,7 +690,7 @@ export default function DashboardPage() {
                   onClick={toggleSelectAllFolders}
                   className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                     isAllFoldersSelected
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
+                      ? 'bg-red-600 border-red-500 text-white'
                       : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
                   }`}
                 >
@@ -743,7 +743,7 @@ export default function DashboardPage() {
                           onClick={(e) => toggleSelectFolder(folder.id, e)}
                           className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                             selectedFolderIds.has(folder.id)
-                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                            ? 'bg-red-600 border-red-500 text-white'
                               : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
                           }`}
                         >
@@ -754,11 +754,11 @@ export default function DashboardPage() {
                           )}
                         </div>
 
-                        <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-indigo-500/20 transition-colors">
-                          <FolderIcon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300" />
+                        <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-red-500/20 transition-colors">
+                          <FolderIcon className="w-6 h-6 text-red-400 group-hover:text-red-300" />
                         </div>
                       </div>
-                      <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950 font-semibold px-2.5 py-1 rounded-full">
+                      <span className="text-xs bg-red-950/40 text-red-400 border border-red-950 font-semibold px-2.5 py-1 rounded-full">
                         {getDocCount(folder.id)} docs
                       </span>
                     </div>
@@ -786,7 +786,7 @@ export default function DashboardPage() {
                 onDrop={handleDrop}
                 className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 text-center transition-all min-h-[250px] ${
                   isDragOver
-                    ? 'border-indigo-500 bg-indigo-500/5'
+                    ? 'border-red-500 bg-red-500/5'
                     : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/30'
                 }`}
               >
@@ -800,7 +800,7 @@ export default function DashboardPage() {
                 />
                 
                 <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
-                  <UploadCloud className="w-8 h-8 text-indigo-400" />
+                  <UploadCloud className="w-8 h-8 text-red-400" />
                 </div>
                 
                 <h3 className="font-semibold text-zinc-200">Drag & Drop Files Here</h3>
@@ -845,7 +845,7 @@ export default function DashboardPage() {
                         {item.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
                         {item.status === 'failed' && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                         {item.status !== 'done' && item.status !== 'failed' && (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-500 flex-shrink-0" />
+                          <Loader2 className="w-4 h-4 animate-spin text-red-500 flex-shrink-0" />
                         )}
                       </div>
                       
@@ -864,9 +864,9 @@ export default function DashboardPage() {
                       <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
                         <div
                           className={`h-full transition-all duration-500 ${
-                            item.status === 'uploading' ? 'w-1/4 bg-indigo-500' :
-                            item.status === 'ocr' ? 'w-2/3 bg-indigo-500' :
-                            item.status === 'categorizing' ? 'w-11/12 bg-indigo-500' :
+                            item.status === 'uploading' ? 'w-1/4 bg-red-500' :
+                            item.status === 'ocr' ? 'w-2/3 bg-red-500' :
+                            item.status === 'categorizing' ? 'w-11/12 bg-red-500' :
                             item.status === 'done' ? 'w-full bg-emerald-500' :
                             'w-full bg-red-500'
                           }`}
@@ -908,7 +908,7 @@ export default function DashboardPage() {
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="e.g. Invoices"
-                className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm"
+                className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 text-sm"
               />
               
               <div className="flex space-x-3 pt-2">
@@ -926,7 +926,7 @@ export default function DashboardPage() {
                 <button
                   type="submit"
                   disabled={folderSubmitting}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-red-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {folderSubmitting ? 'Creating...' : 'Create Folder'}
                 </button>
@@ -961,7 +961,7 @@ export default function DashboardPage() {
               />
               {!cameraStream && (
                 <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm">
-                  <Loader2 className="w-6 h-6 animate-spin mr-2 text-indigo-500" />
+                  <Loader2 className="w-6 h-6 animate-spin mr-2 text-red-500" />
                   <span>Requesting camera permission...</span>
                 </div>
               )}
@@ -981,7 +981,7 @@ export default function DashboardPage() {
                 type="button"
                 onClick={capturePhoto}
                 disabled={!cameraStream}
-                className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-red-500/20 disabled:opacity-50 cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
                 <span>Capture Photo</span>

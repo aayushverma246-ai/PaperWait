@@ -52,12 +52,12 @@ export default function SignupPage() {
   return (
     <div className="relative min-h-screen flex flex-col justify-center items-center bg-[#09090b] px-4 overflow-hidden">
       {/* Background ambient glowing blobs */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-red-500/10 blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-rose-500/10 blur-3xl" />
 
       <div className="w-full max-w-md z-10">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 mb-4 animate-pulse">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-500 to-rose-600 shadow-lg shadow-red-500/30 mb-4 animate-pulse">
             <FileText className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
@@ -96,7 +96,7 @@ export default function SignupPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm"
+                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm"
                 />
               </div>
             </div>
@@ -115,7 +115,7 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm"
+                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm"
                 />
               </div>
             </div>
@@ -123,7 +123,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all shadow-md shadow-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -139,7 +139,7 @@ export default function SignupPage() {
           <div className="mt-6 text-center">
             <p className="text-zinc-500 text-sm">
               Already have an account?{' '}
-              <Link href="/login" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+              <Link href="/login" className="text-red-400 hover:text-red-300 font-medium transition-colors">
                 Sign In
               </Link>
             </p>

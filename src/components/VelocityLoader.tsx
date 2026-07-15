@@ -49,18 +49,7 @@ export default function VelocityLoader({
 
         {/* Progress Bar Mockup */}
         <div className="w-56 h-1 bg-zinc-900 rounded-full mx-auto mt-6 overflow-hidden relative">
-          <div className="h-full bg-indigo-500 w-1/3 animate-progress-bar"></div>
-        </div>
-      </div>
-
-      {/* Decorative Bottom Left Details */}
-      <div className="absolute bottom-10 left-10 flex flex-col items-start space-y-2 opacity-35 hidden sm:flex">
-        <div className="flex items-center space-x-2 text-[9px] font-mono">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span className="text-white tracking-wider">SYSTEMS NOMINAL</span>
-        </div>
-        <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-tighter">
-          X-RAY DELTA 4.0 // VECTOR PROTOCOL
+          <div className="h-full bg-red-500 w-1/3 animate-progress-bar"></div>
         </div>
       </div>
     </div>
