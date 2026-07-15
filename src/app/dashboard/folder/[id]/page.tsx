@@ -184,10 +184,8 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       const { data: docsData, error: docsErr } = await query
       if (docsErr) throw docsErr
 
-      // Batch create signed URLs for image preview thumbnails asynchronously in the background
-      setDocuments((docsData || []).map((doc: any) => ({ ...doc, signedUrl: null })))
-      setSelectedIds(new Set())
-      setLoading(false)
+      // Batch create signed URLs for image preview thumbnails
+      let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
 
       if (docsData && docsData.length > 0) {
         const paths = docsData.map((d: any) =>
@@ -196,32 +194,34 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
             : d.storage_path
         )
 
-        supabase.storage
-          .from('documents')
-          .createSignedUrls(paths, 3600)
-          .then(({ data: signedUrls }) => {
-            if (signedUrls) {
-              setDocuments((prev) =>
-                prev.map((doc) => {
-                  const targetPath = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.file_name)
-                    ? `previews/${doc.id}.png`
-                    : doc.storage_path
-                  const match = signedUrls.find((s) => s.path === targetPath)
-                  return {
-                    ...doc,
-                    signedUrl: match ? match.signedUrl : null
-                  }
-                })
-              )
-            }
-          })
-          .catch((err) => {
-            console.error('Background signed URL load failed:', err)
-          })
+        try {
+          const { data: signedUrls } = await supabase.storage
+            .from('documents')
+            .createSignedUrls(paths, 3600)
+          
+          if (signedUrls) {
+            docsWithUrls = docsData.map((doc: any) => {
+              const targetPath = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.file_name)
+                ? `previews/${doc.id}.png`
+                : doc.storage_path
+              const match = signedUrls.find((s) => s.path === targetPath)
+              return {
+                ...doc,
+                signedUrl: match ? match.signedUrl : null
+              }
+            })
+          }
+        } catch (err) {
+          console.error('Signed URL load failed:', err)
+        }
       }
+
+      setDocuments(docsWithUrls)
+      setSelectedIds(new Set())
     } catch (err) {
       console.error('Error loading folder page:', err)
       router.push('/dashboard')
+    } finally {
       setLoading(false)
     }
   }, [supabase, id, isUncategorized, router])
@@ -331,7 +331,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[500px] w-full">
+      <div className="fixed inset-0 z-50 bg-[#09090b] flex items-center justify-center">
         <VelocityLoader
           title="Loading Folder"
           subtitle="Decrypting catalog components..."

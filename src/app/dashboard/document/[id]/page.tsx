@@ -176,7 +176,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[500px] w-full">
+      <div className="fixed inset-0 z-50 bg-[#09090b] flex items-center justify-center">
         <VelocityLoader
           title="Loading Document"
           subtitle="Decrypting secure document contents..."
