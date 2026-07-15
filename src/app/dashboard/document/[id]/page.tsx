@@ -227,7 +227,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 className="flex items-center space-x-2 px-3 py-2 border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
               >
                 {downloading ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                  <Loader2 className="w-4 h-4 animate-spin text-red-500" />
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
@@ -328,7 +328,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                       const val = e.target.value
                       handleMoveFolder(val === 'uncategorized' ? null : val)
                     }}
-                    className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm appearance-none cursor-pointer"
+                    className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 text-sm appearance-none cursor-pointer"
                   >
                     <option value="uncategorized">Uncategorized (Default)</option>
                     {folders.map((f) => (
@@ -353,14 +353,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl overflow-hidden flex flex-col flex-1 min-h-[250px]">
             <div className="p-4 border-b border-zinc-850 bg-zinc-950/60 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-indigo-400" />
+                <FileText className="w-4 h-4 text-red-400" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Document Purpose</span>
               </div>
             </div>
 
             <div className="flex-1 p-6 bg-zinc-950/40 flex flex-col justify-center text-center">
               <div className="max-w-md mx-auto space-y-4">
-                <div className="inline-flex items-center justify-center p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/10">
+                <div className="inline-flex items-center justify-center p-3 bg-red-500/10 text-red-400 rounded-2xl border border-red-500/10">
                   <FileText className="w-6 h-6" />
                 </div>
                 <h3 className="text-zinc-200 font-bold text-lg">What is this document for?</h3>

@@ -855,7 +855,11 @@ export default function DashboardPage() {
                           {item.status === 'uploading' && 'Uploading...'}
                           {item.status === 'ocr' && 'Extracting text (OCR)...'}
                           {item.status === 'categorizing' && 'Auto-categorizing...'}
-                          {item.status === 'done' && 'Processed'}
+                          {item.status === 'done' && (
+                            <span>
+                              Processed • Saved in <strong className="text-red-400 font-bold">{item.folderName || 'Uncategorized'}</strong>
+                            </span>
+                          )}
                           {item.status === 'failed' && 'Failed'}
                         </span>
                       </div>
