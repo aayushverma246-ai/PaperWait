@@ -28,11 +28,14 @@ interface DBFolder {
 interface DBDocument {
   id: string
   file_name: string
+  file_type?: string
+  storage_path: string
   folder_id: string | null
   status: string
   created_at: string
   ocr_text?: string | null
   description?: string | null
+  signedUrl?: string | null
 }
 
 interface UploadQueueItem {
@@ -272,8 +275,26 @@ export default function DashboardPage() {
 
       if (docsErr) throw docsErr
 
+      // Batch create signed URLs for image preview thumbnails
+      let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
+      
+      if (docsData && docsData.length > 0) {
+        const paths = docsData.map((d: any) => d.storage_path)
+        const { data: signedUrls } = await supabase.storage
+          .from('documents')
+          .createSignedUrls(paths, 3600)
+        
+        docsWithUrls = docsData.map((doc: any) => {
+          const match = signedUrls?.find((s) => s.path === doc.storage_path)
+          return {
+            ...doc,
+            signedUrl: match ? match.signedUrl : null
+          }
+        })
+      }
+
       setFolders(foldersData || [])
-      setDocuments(docsData || [])
+      setDocuments(docsWithUrls)
       setSelectedIds(new Set())
       setSelectedFolderIds(new Set())
     } catch (err) {
@@ -567,9 +588,20 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
-                        <FileText className="w-5 h-5" />
-                      </div>
+                      {doc.signedUrl && (doc.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(doc.file_name)) ? (
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-indigo-500/20 transition-all flex items-center justify-center">
+                          <img
+                            src={doc.signedUrl}
+                            alt={doc.file_name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
                           {highlightText(doc.file_name, searchQuery)}

@@ -30,11 +30,13 @@ interface DBDocument {
   id: string
   file_name: string
   file_type: string
+  storage_path: string
   status: string
   partially_scanned: boolean
   created_at: string
   ocr_text: string | null
   description: string | null
+  signedUrl?: string | null
 }
 
 function highlightText(text: string, highlight: string) {
@@ -168,7 +170,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       // Load documents
       const query = supabase
         .from('documents')
-        .select('id, file_name, file_type, status, partially_scanned, created_at, ocr_text, description')
+        .select('id, file_name, file_type, storage_path, status, partially_scanned, created_at, ocr_text, description')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -181,7 +183,25 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       const { data: docsData, error: docsErr } = await query
       if (docsErr) throw docsErr
 
-      setDocuments(docsData || [])
+      // Batch create signed URLs for image preview thumbnails
+      let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
+      
+      if (docsData && docsData.length > 0) {
+        const paths = docsData.map((d: any) => d.storage_path)
+        const { data: signedUrls } = await supabase.storage
+          .from('documents')
+          .createSignedUrls(paths, 3600)
+        
+        docsWithUrls = docsData.map((doc: any) => {
+          const match = signedUrls?.find((s) => s.path === doc.storage_path)
+          return {
+            ...doc,
+            signedUrl: match ? match.signedUrl : null
+          }
+        })
+      }
+
+      setDocuments(docsWithUrls)
       setSelectedIds(new Set())
     } catch (err) {
       console.error('Error loading folder page:', err)
@@ -499,9 +519,20 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                     )}
                   </div>
 
-                  <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
-                    <FileText className="w-5 h-5" />
-                  </div>
+                  {doc.signedUrl && (doc.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(doc.file_name)) ? (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-indigo-500/20 transition-all flex items-center justify-center">
+                      <img
+                        src={doc.signedUrl}
+                        alt={doc.file_name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
                       {highlightText(doc.file_name, searchQuery)}
