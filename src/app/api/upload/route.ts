@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { rasterizePdf, performOcr, classifyDocument, generateSummary } from '@/utils/ai'
+import { rasterizePdf, performOcr, classifyDocument, generateSummary, generateSummaryFromImage } from '@/utils/ai'
 
 export const maxDuration = 60 // Allow up to 60s execution on Vercel Pro/Enterprise if needed, though usually much faster
 
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     // Run processing
     let ocrText = ''
     let partiallyScanned = false
+    let summaryImageBase64 = ''
 
     try {
       if (fileType === 'application/pdf') {
@@ -85,10 +86,14 @@ export async function POST(request: NextRequest) {
           }
         }
         ocrText = pageTexts.join('\n\n')
+        if (rasterized.images.length > 0) {
+          summaryImageBase64 = rasterized.images[0]
+        }
       } else if (fileType.startsWith('image/')) {
         // Image processing
         const base64Image = buffer.toString('base64')
         ocrText = await performOcr(`data:${fileType};base64,${base64Image}`)
+        summaryImageBase64 = `data:${fileType};base64,${base64Image}`
       } else {
         throw new Error(`Unsupported file type: ${fileType}`)
       }
@@ -137,7 +142,12 @@ export async function POST(request: NextRequest) {
       }
 
       // 3.5 Generate summary/description of what the document is for
-      const description = await generateSummary(ocrText)
+      let description = 'Processed document scan.'
+      if (summaryImageBase64) {
+        description = await generateSummaryFromImage(summaryImageBase64)
+      } else {
+        description = await generateSummary(ocrText)
+      }
 
       // 4. Update document status to done
       const { data: updatedDoc, error: updateError } = await supabase

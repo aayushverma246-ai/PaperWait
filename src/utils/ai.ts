@@ -265,3 +265,62 @@ Do not include any conversational intro, meta commentary, or formatting.`
     return 'Extracted document scan content.'
   }
 }
+
+/**
+ * Generates a 1-sentence friendly description of "what this photo/document is for" using Llama 3.2 11B Vision.
+ */
+export async function generateSummaryFromImage(base64Image: string): Promise<string> {
+  const apiKey = process.env.NVIDIA_API_KEY_LLM
+  if (!apiKey) {
+    throw new Error('NVIDIA_API_KEY_LLM is not defined in environment')
+  }
+
+  let imageUrl = base64Image
+  if (!imageUrl.startsWith('data:')) {
+    imageUrl = `data:image/png;base64,${imageUrl}`
+  }
+
+  try {
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'meta/llama-3.2-11b-vision-instruct',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this photo/image and describe what is in it or what it is for in exactly one clear, friendly sentence (e.g. "This is a selfie of a smiling person inside a bedroom." or "This is a billing invoice from Comcast."). Be concise and start directly with the description.'
+              },
+              {
+                type: 'image_url',
+                image_url: { url: imageUrl }
+              }
+            ]
+          }
+        ],
+        temperature: 0.1,
+        top_p: 0.7,
+        max_tokens: 128,
+        stream: false,
+      }),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('NVIDIA Vision NIM failed:', response.status, errText)
+      return 'Processed document scan.'
+    }
+
+    const resJson = await response.json()
+    return resJson.choices?.[0]?.message?.content?.trim() || 'Processed document scan.'
+  } catch (err) {
+    console.error('Error generating image summary:', err)
+    return 'Processed document scan.'
+  }
+}
