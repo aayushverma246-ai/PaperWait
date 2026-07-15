@@ -88,6 +88,56 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     return nameMatch || contentMatch
   })
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deletingSelected, setDeletingSelected] = useState(false)
+
+  const toggleSelect = (docId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) {
+        next.delete(docId)
+      } else {
+        next.add(docId)
+      }
+      return next
+    })
+  }
+
+  const isAllSelected = filteredDocs.length > 0 && filteredDocs.every(doc => selectedIds.has(doc.id))
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (isAllSelected) {
+        filteredDocs.forEach(doc => next.delete(doc.id))
+      } else {
+        filteredDocs.forEach(doc => next.add(doc.id))
+      }
+      return next
+    })
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`)) return
+    setDeletingSelected(true)
+
+    try {
+      const deletePromises = Array.from(selectedIds).map(id =>
+        fetch(`/api/documents/${id}`, { method: 'DELETE' })
+      )
+      await Promise.all(deletePromises)
+
+      setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
+      setSelectedIds(new Set())
+    } catch (err: any) {
+      alert('Error deleting documents: ' + err.message)
+    } finally {
+      setDeletingSelected(false)
+    }
+  }
+
   const loadData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -130,6 +180,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       if (docsErr) throw docsErr
 
       setDocuments(docsData || [])
+      setSelectedIds(new Set())
     } catch (err) {
       console.error('Error loading folder page:', err)
       router.push('/dashboard')
@@ -362,10 +413,52 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
         )}
       </div>
 
+      {/* Bulk actions banner */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl mb-4 text-sm text-indigo-300 animate-fade-in">
+          <div className="flex items-center space-x-3">
+            <span className="font-semibold text-zinc-200">{selectedIds.size} items selected</span>
+            <span className="text-zinc-600">•</span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold"
+            >
+              Deselect All
+            </button>
+          </div>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={deletingSelected}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-red-600/10"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{deletingSelected ? 'Deleting...' : 'Delete Selected'}</span>
+          </button>
+        </div>
+      )}
+
       {/* List of Documents */}
       <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden">
         <div className="p-5 border-b border-zinc-850 flex items-center justify-between">
-          <h2 className="font-semibold text-zinc-300">Documents in this folder</h2>
+          <div className="flex items-center space-x-3">
+            {filteredDocs.length > 0 && (
+              <div
+                onClick={toggleSelectAll}
+                className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                  isAllSelected
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                    : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
+                }`}
+              >
+                {isAllSelected && (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+            )}
+            <h2 className="font-semibold text-zinc-300">Documents in this folder</h2>
+          </div>
           <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
             {filteredDocs.length} files
           </span>
@@ -388,6 +481,22 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                 className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all"
               >
                 <div className="flex items-center space-x-4 min-w-0">
+                  {/* Checkbox Select */}
+                  <div
+                    onClick={(e) => toggleSelect(doc.id, e)}
+                    className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                      selectedIds.has(doc.id)
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
+                    }`}
+                  >
+                    {selectedIds.has(doc.id) && (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+
                   <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
                     <FileText className="w-5 h-5" />
                   </div>

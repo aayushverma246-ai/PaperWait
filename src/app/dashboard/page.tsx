@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import {
@@ -15,7 +15,8 @@ import {
   FolderOpen,
   Search,
   X,
-  Camera
+  Camera,
+  Trash2
 } from 'lucide-react'
 
 interface DBFolder {
@@ -89,6 +90,110 @@ export default function DashboardPage() {
     return nameMatch || contentMatch
   })
 
+  // Camera Capture state & handlers
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const startCamera = async () => {
+    setIsCameraActive(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      })
+      setCameraStream(stream)
+      // Small timeout to allow video element ref to mount
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+      }, 100)
+    } catch (err: any) {
+      console.error('Failed to open camera:', err)
+      alert('Camera permission denied or camera not available.')
+      setIsCameraActive(false)
+    }
+  }
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop())
+      setCameraStream(null)
+    }
+    setIsCameraActive(false)
+  }
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return
+    const video = videoRef.current
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `camera_capture_${Date.now()}.png`, { type: 'image/png' })
+          uploadFile(file)
+          stopCamera()
+        }
+      }, 'image/png')
+    }
+  }
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deletingSelected, setDeletingSelected] = useState(false)
+
+  const toggleSelect = (docId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) {
+        next.delete(docId)
+      } else {
+        next.add(docId)
+      }
+      return next
+    })
+  }
+
+  const isAllSelected = filteredDocs.length > 0 && filteredDocs.every(doc => selectedIds.has(doc.id))
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (isAllSelected) {
+        filteredDocs.forEach(doc => next.delete(doc.id))
+      } else {
+        filteredDocs.forEach(doc => next.add(doc.id))
+      }
+      return next
+    })
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`)) return
+    setDeletingSelected(true)
+
+    try {
+      const deletePromises = Array.from(selectedIds).map(id =>
+        fetch(`/api/documents/${id}`, { method: 'DELETE' })
+      )
+      await Promise.all(deletePromises)
+
+      setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
+      setSelectedIds(new Set())
+    } catch (err: any) {
+      alert('Error deleting documents: ' + err.message)
+    } finally {
+      setDeletingSelected(false)
+    }
+  }
+
   // Load data
   const loadData = useCallback(async () => {
     try {
@@ -115,6 +220,7 @@ export default function DashboardPage() {
 
       setFolders(foldersData || [])
       setDocuments(docsData || [])
+      setSelectedIds(new Set())
     } catch (err) {
       console.error('Error loading dashboard data:', err)
     } finally {
@@ -286,10 +392,52 @@ export default function DashboardPage() {
       {searchQuery ? (
         /* Search Results Mode */
         <div>
+          {/* Bulk actions banner */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl mb-4 text-sm text-indigo-300 animate-fade-in">
+              <div className="flex items-center space-x-3">
+                <span className="font-semibold text-zinc-200">{selectedIds.size} items selected</span>
+                <span className="text-zinc-600">•</span>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold"
+                >
+                  Deselect All
+                </button>
+              </div>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={deletingSelected}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-red-600/10"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{deletingSelected ? 'Deleting...' : 'Delete Selected'}</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4 border-b border-zinc-800/60 pb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
-              Search Results for "{searchQuery}"
-            </h2>
+            <div className="flex items-center space-x-3">
+              {filteredDocs.length > 0 && (
+                <div
+                  onClick={toggleSelectAll}
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                    isAllSelected
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
+                      : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
+                  }`}
+                >
+                  {isAllSelected && (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              )}
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
+                Search Results for "{searchQuery}"
+              </h2>
+            </div>
             <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950/50 font-semibold px-2.5 py-1 rounded-full">
               {filteredDocs.length} matches
             </span>
@@ -325,6 +473,22 @@ export default function DashboardPage() {
                     className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all animate-fade-in"
                   >
                     <div className="flex items-center space-x-4 min-w-0">
+                      {/* Checkbox Select */}
+                      <div
+                        onClick={(e) => toggleSelect(doc.id, e)}
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                          selectedIds.has(doc.id)
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
+                        }`}
+                      >
+                        {selectedIds.has(doc.id) && (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+
                       <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-indigo-400 group-hover:border-indigo-500/10 transition-all flex-shrink-0">
                         <FileText className="w-5 h-5" />
                       </div>
@@ -446,15 +610,6 @@ export default function DashboardPage() {
                   className="hidden"
                 />
                 
-                <input
-                  type="file"
-                  id="camera-upload"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => handleFilesSelected(e.target.files)}
-                  className="hidden"
-                />
-                
                 <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
                   <UploadCloud className="w-8 h-8 text-indigo-400" />
                 </div>
@@ -471,13 +626,14 @@ export default function DashboardPage() {
                   >
                     Browse Files
                   </label>
-                  <label
-                    htmlFor="camera-upload"
+                  <button
+                    type="button"
+                    onClick={startCamera}
                     className="inline-flex items-center justify-center px-4 py-2 border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 hover:text-white rounded-xl text-sm font-semibold text-zinc-300 transition-all cursor-pointer shadow-md"
                   >
                     <Camera className="w-4 h-4 mr-2" />
                     Take Photo
-                  </label>
+                  </button>
                 </div>
               </div>
             </div>
@@ -587,6 +743,61 @@ export default function DashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Camera Capture Modal */}
+      {isCameraActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md px-4 animate-fade-in">
+          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-zinc-850 bg-zinc-950 flex items-center justify-between">
+              <h3 className="font-semibold text-white">Capture Document Photo</h3>
+              <button
+                onClick={stopCamera}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Live Video Feed */}
+            <div className="relative bg-black flex items-center justify-center aspect-video">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {!cameraStream && (
+                <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2 text-indigo-500" />
+                  <span>Requesting camera permission...</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Actions */}
+            <div className="p-4 bg-zinc-950 flex items-center justify-center space-x-4">
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="px-4 py-2.5 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              
+              <button
+                type="button"
+                onClick={capturePhoto}
+                disabled={!cameraStream}
+                className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Capture Photo</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
