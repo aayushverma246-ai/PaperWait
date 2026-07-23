@@ -12,6 +12,8 @@
 
 *A premium, secure, and AI-powered document intelligence safe that automates file organization.*
 
+### 🌐 [paperwait.me](https://paperwait.me)
+
 [Key Features](#-key-features) • [System Architecture](#-system-architecture) • [Getting Started](#-getting-started) • [Database Setup](#-database--storage-setup) • [Security Spec](#-security-specifications)
 
 </div>
