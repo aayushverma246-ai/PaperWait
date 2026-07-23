@@ -1,17 +1,29 @@
 # 📄 PaperWait
 
-> *Because waiting to find it isn't an option.*
+<div align="center">
 
-PaperWait is a premium, AI-powered document organizer that automates document uploads, performs optical character recognition (OCR), classifies document types, extracts key entities, and routes files into dynamically generated or existing folders. Built on Next.js, Supabase, and NVIDIA NIM APIs, it provides a fast and highly secure digital document safe.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16.2-black.svg?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-green.svg?logo=supabase)](https://supabase.com/)
+[![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM_APIs-green.svg)](https://build.nvidia.com/)
+
+**"Because waiting to find it isn't an option."**
+
+*A premium, secure, and AI-powered document intelligence safe that automates file organization.*
+
+[Key Features](#-key-features) • [System Architecture](#-system-architecture) • [Getting Started](#-getting-started) • [Database Setup](#-database--storage-setup) • [Security Spec](#-security-specifications)
+
+</div>
 
 ---
 
 ## 🌟 Key Features
 
-- ⚡ **Multi-Format Processing**: Supports PDFs, images (PNG, JPEG), Word docs (DOCX/DOC), Excel spreadsheets (XLSX), PowerPoint slides (PPTX/PPT), CSV, and TXT files.
+- ⚡ **Multi-Format Processing**: Seamlessly ingests PDFs, images (PNG, JPEG), Word docs (`.docx`/`.doc`), Excel spreadsheets (`.xlsx`), PowerPoint slides (`.pptx`/`.ppt`), CSV, and TXT files.
 - 🤖 **Ensembled Multi-Model AI Routing**:
   - **Llama 3.1 8B**: Evaluates fast-path document classification.
-  - **Nemotron-3-Nano Reasoning**: Solves deep categorization and entities extraction.
+  - **Nemotron-3-Nano Reasoning**: Solves deep categorization and entity extraction.
   - **DeepSeek V4 Flash**: Creates friendly 1-sentence descriptions and summaries.
   - **Llama 3.2 11B Vision**: Describes visual-only and photo uploads.
 - 📁 **Smart Folder Match & Auto-Creation**: Merges document context with user folder structures. Automatically routes transactional files (receipts, utility bills) and matches existing folders through substring and Levenshtein distance metrics.
@@ -20,16 +32,41 @@ PaperWait is a premium, AI-powered document organizer that automates document up
 
 ---
 
-## 🏗️ Technical Stack
+## 🏗️ System Architecture
 
-- **Framework**: [Next.js](https://nextjs.org/) (App Router, TailwindCSS v4, TypeScript)
-- **Database & Storage**: [Supabase](https://supabase.com/) (PostgreSQL with RLS, Supabase Storage buckets)
-- **Document Text Extractors**:
-  - **mammoth** (DOCX to text extraction)
-  - **xlsx** (Excel data extraction)
-  - **officeparser** (PowerPoint XML parsing)
-- **AI Pipelines**: [NVIDIA NIM API](https://build.nvidia.com/) (Nemotron OCR v2, Llama 3.1/3.2, DeepSeek, and Nemotron reasoning models)
-- **Canvas Rendering**: `@napi-rs/canvas` (High-performance Node canvas implementation for server-side preview thumbnail generation)
+The workflow below illustrates how files move securely from the upload boundary to AI-powered classification, visual preview generation, and directory routing.
+
+```mermaid
+graph TD
+    User([User App]) -->|Upload File| UploadAPI[Upload API Router]
+    UploadAPI -->|Verify User| AuthCheck{Auth Checked?}
+    AuthCheck -->|No| Unauthorized[401 Unauthorized]
+    AuthCheck -->|Yes| DBInit[DB Row: status='processing']
+    
+    DBInit -->|Background Process after| Download[Fetch File from Storage]
+    Download -->|Determine File Type| Pipeline{File Type?}
+    
+    Pipeline -->|PDF| PDFOcr[Process PDF / Run OCR]
+    Pipeline -->|Image| ImgOcr[Run OCR / Vision Summary]
+    Pipeline -->|Office/Text| TextParse[Parse raw text/office cells]
+    
+    PDFOcr --> LLMRoute[AI Routing Pipeline]
+    ImgOcr --> LLMRoute
+    TextParse --> LLMRoute
+    
+    LLMRoute --> LlamaPath[Fast Path Llama 3.1 8B]
+    LLMRoute --> NemoPath[Deep Reasoning Nemotron-3-Nano]
+    
+    LlamaPath --> Normalizer[Folder Match & Auto-Rename]
+    NemoPath --> Normalizer
+    
+    Normalizer --> FolderMatch{Folder exists?}
+    FolderMatch -->|Yes| BindDoc[Assign document to folder]
+    FolderMatch -->|No| CreateFolder[Create folder in DB] --> BindDoc
+    
+    BindDoc --> GenPreview[Generate SVG/Canvas Preview Card]
+    GenPreview --> SaveDB[Update DB Row: status='done']
+```
 
 ---
 
@@ -37,21 +74,14 @@ PaperWait is a premium, AI-powered document organizer that automates document up
 
 To run PaperWait locally, copy `.env.local.example` to `.env.local` and configure the following variables:
 
-```bash
-# Supabase credentials (pointing to your Supabase project)
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-
-# Required for background tasks where user cookies are not present
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
-
-# NVIDIA API credentials for OCR and LLMs
-NVIDIA_API_KEY_OCR=nvapi-...
-NVIDIA_API_KEY_LLM=nvapi-...
-
-# Gotenberg document conversion service (optional, defaults to local dev server)
-GOTENBERG_URL=http://localhost:3000
-```
+| Environment Variable | Description |
+| :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | The public API URL of your Supabase project instance |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The client-side Anonymous public key for Supabase API requests |
+| `SUPABASE_SERVICE_ROLE_KEY` | The secret service role key (Required for secure background processing) |
+| `NVIDIA_API_KEY_OCR` | Your NVIDIA API credential for the Nemotron OCR NIM |
+| `NVIDIA_API_KEY_LLM` | Your NVIDIA API credential for Llama/Nemotron/DeepSeek models |
+| `GOTENBERG_URL` | Gotenberg document conversion service URL (Optional, defaults to local dev server) |
 
 ---
 
@@ -62,7 +92,7 @@ All database migrations are located in the `supabase/migrations/` directory.
 ### 1. Database Schema
 Execute the migration scripts against your Supabase Postgres database. The schema configures:
 - `public.folders`: Maps folders to specific user sessions.
-- `public.documents`: Stores document statuses, OCR transcripts, metadata, folder relationships, and JSON-serialized AI analysis details.
+- `public.documents`: Stores document statuses, OCR transcripts, descriptions, folder relationships, and JSON-serialized AI analysis details.
 
 ### 2. Row Level Security (RLS)
 The migration enforces security boundaries using `auth.uid() = user_id`. No client can read, insert, update, or delete folders or documents unless they own them.
@@ -107,18 +137,15 @@ Builds are optimized for production deployments (e.g., Vercel, Docker).
 
 ---
 
-## 📂 Project Structure
+## 🛡️ Security Specifications
 
-```
-├── .env.local.example       # Template environment variables
-├── supabase/
-│   └── migrations/          # Postgres migrations (Schema + RLS + Bucket Policies)
-├── src/
-│   ├── app/                 # Next.js App Router (Dashboard, Login, APIs)
-│   │   ├── api/             # API routes (upload, document, folders management)
-│   │   └── dashboard/       # Dashboard pages, folder navigation, doc viewer
-│   ├── components/          # Reusable UI widgets (VelocityLoader, ConfirmModal, etc.)
-│   └── utils/
-│       ├── ai.ts            # NVIDIA NIM API connectors, OCR & classification logic
-│       └── supabase/        # Supabase SSR client, server, and middleware configurations
-```
+PaperWait has been engineered with safety at its core:
+1. **API Keys Isolation**: No sensitive keys are hardcoded in the codebase. All keys are read from environment variables.
+2. **Access Control**: Checked user IDs on all queries. Direct endpoints like file updates enforce strict ownership checks before committing database operations.
+3. **Environment Security**: The `.gitignore` excludes credential files (`.env.local`) and development directories (`scratch/`) to ensure no operational credentials or local artifacts are ever staged.
+
+---
+
+## 📄 License
+
+This repository is licensed under the [MIT License](LICENSE).
