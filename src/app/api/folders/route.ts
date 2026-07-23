@@ -12,8 +12,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const { name } = await request.json()
-    if (!name || name.trim() === '') {
+    if (!name || typeof name !== 'string' || name.trim() === '') {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 })
+    }
+
+    const sanitizedName = name
+      .replace(/<[^>]*>/g, '') // strip HTML tags
+      .trim()
+      .substring(0, 100) // max length
+
+    if (sanitizedName === '') {
+      return NextResponse.json({ error: 'Invalid folder name' }, { status: 400 })
     }
 
     // Insert folder
@@ -21,7 +30,7 @@ export async function POST(request: NextRequest) {
       .from('folders')
       .insert({
         user_id: user.id,
-        name: name.trim(),
+        name: sanitizedName,
       })
       .select()
       .single()

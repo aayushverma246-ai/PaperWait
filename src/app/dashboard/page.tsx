@@ -16,9 +16,13 @@ import {
   Search,
   X,
   Camera,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react'
-import VelocityLoader from '@/components/VelocityLoader'
+import ConfirmModal from '@/components/ConfirmModal'
+import SearchInput from '@/components/SearchInput'
+import DocumentRow from '@/components/DocumentRow'
+import { useUpload } from './UploadContext'
 
 interface DBFolder {
   id: string
@@ -37,6 +41,7 @@ interface DBDocument {
   ocr_text?: string | null
   description?: string | null
   signedUrl?: string | null
+  thumbnailError?: boolean
 }
 
 interface UploadQueueItem {
@@ -47,34 +52,25 @@ interface UploadQueueItem {
   folderName?: string
 }
 
-function highlightText(text: string, highlight: string) {
-  if (!highlight.trim()) {
-    return <span>{text}</span>
-  }
-  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`(${escapedHighlight})`, 'gi')
-  const parts = text.split(regex)
-  return (
-    <span>
-      {parts.map((part, i) =>
-        regex.test(part) ? (
-          <mark key={i} className="bg-red-500/30 text-red-300 px-1 py-0.5 rounded font-bold">
-            {part}
-          </mark>
-        ) : (
-          part
-        )
-      )}
-    </span>
-  )
-}
-
 export default function DashboardPage() {
   const supabase = createClient()
 
   const [folders, setFolders] = useState<DBFolder[]>([])
   const [documents, setDocuments] = useState<DBDocument[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Custom confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void | Promise<void>
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  })
   
   // New folder dialog
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
@@ -82,15 +78,24 @@ export default function DashboardPage() {
   const [folderError, setFolderError] = useState('')
   const [folderSubmitting, setFolderSubmitting] = useState(false)
 
-  // Upload queue
-  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [uploadTargetFolderId, setUploadTargetFolderId] = useState('auto')
+  // Upload context
+  const {
+    uploadQueue,
+    setUploadQueue,
+    uploadTargetFolderId,
+    setUploadTargetFolderId,
+    uploadFile,
+    cancelUpload,
+    processUploadQueue,
+    duplicateFile,
+    setDuplicateFile,
+    duplicateExistingDoc,
+    setDuplicateExistingDoc,
+    pendingUploadsQueue,
+    setPendingUploadsQueue,
+  } = useUpload()
 
-  // Conflict resolution states
-  const [duplicateFile, setDuplicateFile] = useState<File | null>(null)
-  const [duplicateExistingDoc, setDuplicateExistingDoc] = useState<DBDocument | null>(null)
-  const [pendingUploadsQueue, setPendingUploadsQueue] = useState<File[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
 
   // Search query
   const [searchQuery, setSearchQuery] = useState('')
@@ -99,7 +104,15 @@ export default function DashboardPage() {
   const filteredDocs = documents.filter((doc) => {
     const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
     const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
-    const descMatch = doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    let plainDescription = doc.description || ''
+    if (plainDescription.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(plainDescription)
+        plainDescription = (parsed.short_summary || '') + ' ' + (parsed.document_title || '') + ' ' + (parsed.final_category || '') + ' ' + (parsed.primary_entity || '')
+      } catch (e) {}
+    }
+    const descMatch = plainDescription && plainDescription.toLowerCase().includes(searchQuery.toLowerCase())
     return nameMatch || contentMatch || descMatch
   })
 
@@ -188,23 +201,29 @@ export default function DashboardPage() {
     })
   }
 
-  const handleDeleteSelected = async () => {
-    if (!confirm(`Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`)) return
-    setDeletingSelected(true)
+  const handleDeleteSelected = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Selected Documents?',
+      message: `Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`,
+      onConfirm: async () => {
+        setDeletingSelected(true)
+        try {
+          const deletePromises = Array.from(selectedIds).map(id =>
+            fetch(`/api/documents/${id}`, { method: 'DELETE' })
+          )
+          await Promise.all(deletePromises)
 
-    try {
-      const deletePromises = Array.from(selectedIds).map(id =>
-        fetch(`/api/documents/${id}`, { method: 'DELETE' })
-      )
-      await Promise.all(deletePromises)
-
-      setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
-      setSelectedIds(new Set())
-    } catch (err: any) {
-      alert('Error deleting documents: ' + err.message)
-    } finally {
-      setDeletingSelected(false)
-    }
+          setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
+          setSelectedIds(new Set())
+        } catch (err: any) {
+          alert('Error deleting documents: ' + err.message)
+        } finally {
+          setDeletingSelected(false)
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
   }
 
   // Folder Selection States
@@ -225,41 +244,77 @@ export default function DashboardPage() {
     })
   }
 
-  const isAllFoldersSelected = folders.length > 0 && folders.every(f => selectedFolderIds.has(f.id))
+  const isAllFoldersSelected = folders.length > 0 && folders.every(f => selectedFolderIds.has(f.id)) && selectedFolderIds.has('uncategorized')
 
   const toggleSelectAllFolders = () => {
     setSelectedFolderIds((prev) => {
       const next = new Set(prev)
       if (isAllFoldersSelected) {
         folders.forEach(f => next.delete(f.id))
+        next.delete('uncategorized')
       } else {
         folders.forEach(f => next.add(f.id))
+        next.add('uncategorized')
       }
       return next
     })
   }
 
-  const handleDeleteSelectedFolders = async () => {
-    if (!confirm(`Are you sure you want to permanently delete the ${selectedFolderIds.size} selected folders and ALL documents inside them? This cannot be undone.`)) return
-    setDeletingFolders(true)
+  const handleDeleteSelectedFolders = () => {
+    const hasUncategorized = selectedFolderIds.has('uncategorized')
+    const customFolderIds = Array.from(selectedFolderIds).filter(id => id !== 'uncategorized')
 
-    try {
-      const deletePromises = Array.from(selectedFolderIds).map(id =>
-        fetch(`/api/folders/${id}`, { method: 'DELETE' })
-      )
-      await Promise.all(deletePromises)
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Selected Folders?',
+      message: `Are you sure you want to permanently delete the selected folders and all documents inside them?${hasUncategorized ? ' This will also permanently delete all uncategorized documents.' : ''} This cannot be undone.`,
+      onConfirm: async () => {
+        setDeletingFolders(true)
+        try {
+          // Delete custom folders (which cleans up db and storage)
+          const deletePromises = customFolderIds.map(id =>
+            fetch(`/api/folders/${id}`, { method: 'DELETE' })
+          )
+          await Promise.all(deletePromises)
 
-      setFolders(prev => prev.filter(f => !selectedFolderIds.has(f.id)))
-      setSelectedFolderIds(new Set())
-    } catch (err: any) {
-      alert('Error deleting folders: ' + err.message)
-    } finally {
-      setDeletingFolders(false)
-    }
+          // If uncategorized selected, delete all uncategorized documents
+          if (hasUncategorized) {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              const { data: uncDocs } = await supabase
+                .from('documents')
+                .select('id')
+                .eq('user_id', user.id)
+                .is('folder_id', null)
+
+              if (uncDocs && uncDocs.length > 0) {
+                const deleteDocPromises = uncDocs.map(doc =>
+                  fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
+                )
+                await Promise.all(deleteDocPromises)
+              }
+            }
+          }
+
+          setSelectedFolderIds(new Set())
+          await loadData(false)
+        } catch (err: any) {
+          alert('Error deleting folders: ' + err.message)
+        } finally {
+          setDeletingFolders(false)
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
   }
 
   // Load data
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showOverlay: boolean = true) => {
+    if (showOverlay && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app-loading-start', {
+        detail: { title: 'Loading Dashboard', subtitle: 'Decrypting catalog structure...' }
+      }))
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -282,16 +337,11 @@ export default function DashboardPage() {
 
       if (docsErr) throw docsErr
 
-      setFolders(foldersData || [])
       // Batch create signed URLs for image preview thumbnails
       let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
 
       if (docsData && docsData.length > 0) {
-        const paths = docsData.map((d: any) =>
-          d.file_type?.startsWith('image/') || d.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(d.file_name)
-            ? `${user.id}/previews/${d.id}.png`
-            : d.storage_path
-        )
+        const paths = docsData.map((d: any) => `${user.id}/previews/${d.id}.png`)
 
         try {
           const { data: signedUrls } = await supabase.storage
@@ -300,9 +350,7 @@ export default function DashboardPage() {
           
           if (signedUrls) {
             docsWithUrls = docsData.map((doc: any) => {
-              const targetPath = doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)
-                ? `${user.id}/previews/${doc.id}.png`
-                : doc.storage_path
+              const targetPath = `${user.id}/previews/${doc.id}.png`
               const match = signedUrls.find((s) => s.path === targetPath)
               return {
                 ...doc,
@@ -315,6 +363,36 @@ export default function DashboardPage() {
         }
       }
 
+      // Preload all thumbnail images to prevent blank squares
+      if (docsWithUrls && docsWithUrls.length > 0) {
+        try {
+          const preloadPromises = docsWithUrls.map(d => {
+            const hasThumbnail = !!d.signedUrl
+            if (!hasThumbnail) return Promise.resolve()
+            
+            return new Promise<void>((resolve) => {
+              const img = new Image()
+              img.src = d.signedUrl!
+              const timer = setTimeout(() => {
+                resolve()
+              }, 2000)
+              img.onload = () => {
+                clearTimeout(timer)
+                resolve()
+              }
+              img.onerror = () => {
+                clearTimeout(timer)
+                d.thumbnailError = true
+                resolve()
+              }
+            })
+          })
+          await Promise.all(preloadPromises)
+        } catch (preloadErr) {
+          console.warn('Thumbnail preloading failed:', preloadErr)
+        }
+      }
+
       setFolders(foldersData || [])
       setDocuments(docsWithUrls)
       setSelectedIds(new Set())
@@ -323,6 +401,10 @@ export default function DashboardPage() {
       console.error('Error loading dashboard data:', err)
     } finally {
       setLoading(false)
+      if (showOverlay && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-loading-stop'))
+        sessionStorage.removeItem('next_loading_type')
+      }
     }
   }, [supabase])
 
@@ -357,7 +439,12 @@ export default function DashboardPage() {
 
       setFolders((prev) => [...prev, result].sort((a, b) => a.name.localeCompare(b.name)))
       setNewFolderName('')
+      // Close modal without triggering a scroll jump
+      const savedScroll = typeof window !== 'undefined' ? window.scrollY : 0
       setIsCreatingFolder(false)
+      requestAnimationFrame(() => {
+        if (typeof window !== 'undefined') window.scrollTo({ top: savedScroll, behavior: 'instant' })
+      })
     } catch (err: any) {
       setFolderError(err.message)
     } finally {
@@ -365,103 +452,26 @@ export default function DashboardPage() {
     }
   }
 
-  // File upload logic
-  const uploadFile = async (file: File, replaceDocId?: string) => {
-    const queueId = crypto.randomUUID()
-    
-    // Add to queue
-    setUploadQueue((prev) => [
-      { id: queueId, fileName: replaceDocId ? `${file.name} (Replacing)` : file.name, status: 'uploading' },
-      ...prev,
-    ])
-
-    const updateItemStatus = (status: UploadQueueItem['status'], error?: string) => {
-      setUploadQueue((prev) =>
-        prev.map((item) => (item.id === queueId ? { ...item, status, error } : item))
-      )
-    }
-
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folderId', uploadTargetFolderId)
-      if (replaceDocId) {
-        formData.append('replaceDocId', replaceDocId)
-      }
-
-      // Start upload & process. The endpoint performs OCR and LLM classification inline
-      // We will simulate step transitions for better UI feel.
-      
-      const uploadPromise = fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+  // Listen to background document completions to refresh document list
+  useEffect(() => {
+    const handleProcessed = () => {
+      // Preserve scroll position across the silent data refresh
+      const savedScroll = typeof window !== 'undefined' ? window.scrollY : 0
+      loadData(false).then(() => {
+        requestAnimationFrame(() => {
+          if (typeof window !== 'undefined') window.scrollTo({ top: savedScroll, behavior: 'instant' })
+        })
       })
-
-      // Shift to OCR after ~1.5s (average upload time)
-      const ocrTimeout = setTimeout(() => {
-        updateItemStatus('ocr')
-      }, 1500)
-
-      // Shift to categorizing after ~5s (average OCR time)
-      const categorizingTimeout = setTimeout(() => {
-        updateItemStatus('categorizing')
-      }, 5500)
-
-      const response = await uploadPromise
-      clearTimeout(ocrTimeout)
-      clearTimeout(categorizingTimeout)
-
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to process document')
-      }
-
-      // Reload dashboard data first
-      await loadData()
-
-      // Look up folder name
-      let destFolderName = 'Uncategorized'
-      if (result.folder_id) {
-        const { data: latestFolder } = await supabase
-          .from('folders')
-          .select('name')
-          .eq('id', result.folder_id)
-          .single()
-        if (latestFolder) {
-          destFolderName = latestFolder.name
-        }
-      }
-
-      setUploadQueue((prev) =>
-        prev.map((item) => (item.id === queueId ? { ...item, status: 'done', folderName: destFolderName } : item))
-      )
-    } catch (err: any) {
-      updateItemStatus('failed', err.message || 'An error occurred during processing')
     }
-  }
-
-  const processUploadQueue = async (filesToUpload: File[]) => {
-    const nextPending = [...filesToUpload]
-    while (nextPending.length > 0) {
-      const file = nextPending.shift()!
-      if (!file) continue
-
-      // Check if file_name already exists in documents list
-      const existingDoc = documents.find(
-        (d) => d.file_name.toLowerCase() === file.name.toLowerCase()
-      )
-      if (existingDoc) {
-        // Pause and trigger conflict modal
-        setDuplicateFile(file)
-        setDuplicateExistingDoc(existingDoc)
-        setPendingUploadsQueue(nextPending)
-        return
-      }
-
-      // No duplicate, upload normally
-      await uploadFile(file)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('document-processed', handleProcessed)
     }
-  }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('document-processed', handleProcessed)
+      }
+    }
+  }, [loadData])
 
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return
@@ -487,12 +497,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return (
-      <VelocityLoader
-        title="Loading Dashboard"
-        subtitle="Decrypting catalog structure..."
-      />
-    )
+    return null
   }
 
   return (
@@ -505,7 +510,7 @@ export default function DashboardPage() {
         </div>
         <button
           onClick={() => setIsCreatingFolder(true)}
-          className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-medium transition-all shadow-md shadow-red-500/20 cursor-pointer"
+          className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-medium transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-indigo-500/20 cursor-pointer"
         >
           <Plus className="w-5 h-5" />
           <span>New Folder</span>
@@ -513,39 +518,24 @@ export default function DashboardPage() {
       </div>
 
       {/* Search Input Bar */}
-      <div className="relative max-w-xl">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-500">
-          <Search className="w-5 h-5" />
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search all documents by name or content..."
-          className="block w-full pl-11 pr-10 py-3 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+      <SearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search all documents by name or content..."
+      />
 
       {searchQuery ? (
         /* Search Results Mode */
         <div>
           {/* Bulk actions banner */}
           {selectedIds.size > 0 && (
-            <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/40 rounded-2xl mb-4 text-sm text-red-300 animate-fade-in">
-              <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl mb-4 text-sm text-indigo-300 animate-fade-in gap-3">
+              <div className="flex items-center justify-center space-x-3 w-full sm:w-auto">
                 <span className="font-semibold text-zinc-200">{selectedIds.size} items selected</span>
-                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-700 font-bold">•</span>
                 <button
                   onClick={() => setSelectedIds(new Set())}
-                  className="text-red-400 hover:text-red-200 transition-colors font-semibold"
+                  className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold underline underline-offset-4 cursor-pointer"
                 >
                   Deselect All
                 </button>
@@ -553,7 +543,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleDeleteSelected}
                 disabled={deletingSelected}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-red-600/10"
+                className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-750 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md w-full sm:w-auto text-center"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>{deletingSelected ? 'Deleting...' : 'Delete Selected'}</span>
@@ -568,7 +558,7 @@ export default function DashboardPage() {
                   onClick={toggleSelectAll}
                   className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                     isAllSelected
-                      ? 'bg-red-600 border-red-500 text-white'
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
                       : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
                   }`}
                 >
@@ -580,10 +570,10 @@ export default function DashboardPage() {
                 </div>
               )}
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                Search Results for "{searchQuery}"
+                {`Search Results for "${searchQuery}"`}
               </h2>
             </div>
-            <span className="text-xs bg-red-950/40 text-red-400 border border-red-950/50 font-semibold px-2.5 py-1 rounded-full">
+            <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950/50 font-semibold px-2.5 py-1 rounded-full">
               {filteredDocs.length} matches
             </span>
           </div>
@@ -610,75 +600,33 @@ export default function DashboardPage() {
                     snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
                   }
                 }
-                if (!snippet && doc.description) {
-                  const idx = doc.description.toLowerCase().indexOf(searchQuery.toLowerCase())
+                let plainDescription = doc.description || ''
+                if (plainDescription.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(plainDescription)
+                    plainDescription = parsed.short_summary || parsed.description || ''
+                  } catch (e) {}
+                }
+
+                if (!snippet && plainDescription) {
+                  const idx = plainDescription.toLowerCase().indexOf(searchQuery.toLowerCase())
                   if (idx !== -1) {
                     const start = Math.max(0, idx - 30)
-                    const end = Math.min(doc.description.length, idx + 70)
-                    snippet = (start > 0 ? '...' : '') + doc.description.substring(start, end).replace(/\n/g, ' ') + (end < doc.description.length ? '...' : '')
+                    const end = Math.min(plainDescription.length, idx + 70)
+                    snippet = (start > 0 ? '...' : '') + plainDescription.substring(start, end).replace(/\n/g, ' ') + (end < plainDescription.length ? '...' : '')
                   }
                 }
 
                 return (
-                  <Link
+                  <DocumentRow
                     key={doc.id}
-                    href={`/dashboard/document/${doc.id}`}
-                    className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all animate-fade-in"
-                  >
-                    <div className="flex items-center space-x-4 min-w-0">
-                      {/* Checkbox Select */}
-                      <div
-                        onClick={(e) => toggleSelect(doc.id, e)}
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
-                          selectedIds.has(doc.id)
-                            ? 'bg-red-600 border-red-500 text-white'
-                            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
-                        }`}
-                      >
-                        {selectedIds.has(doc.id) && (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-
-                      {doc.signedUrl && (doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)) ? (
-                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-red-500/20 transition-all flex items-center justify-center">
-                          <img
-                            src={doc.signedUrl}
-                            alt={doc.file_name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        </div>
-                      ) : (
-                        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-red-400 group-hover:border-red-500/10 transition-all flex-shrink-0">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
-                          {highlightText(doc.file_name, searchQuery)}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-500">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                            {docFolder ? docFolder.name : 'Uncategorized'}
-                          </span>
-                          <span className="text-zinc-700">•</span>
-                          <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                          {snippet && (
-                            <>
-                              <span className="text-zinc-700">•</span>
-                              <span className="italic text-[11px] text-zinc-400 max-w-[300px] sm:max-w-[450px] truncate">
-                                {highlightText(snippet, searchQuery)}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block flex-shrink-0" />
-                  </Link>
+                    doc={doc as any}
+                    selectedIds={selectedIds}
+                    toggleSelect={toggleSelect}
+                    searchQuery={searchQuery}
+                    folderName={docFolder ? docFolder.name : 'Uncategorized'}
+                    snippet={snippet}
+                  />
                 )
               })}
             </div>
@@ -689,13 +637,13 @@ export default function DashboardPage() {
         <>
           {/* Folders Selection actions banner */}
           {selectedFolderIds.size > 0 && (
-            <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/40 rounded-2xl text-sm text-red-300 animate-fade-in mb-6">
-              <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl text-sm text-indigo-300 animate-fade-in mb-6 gap-3">
+              <div className="flex items-center justify-center space-x-3 w-full sm:w-auto">
                 <span className="font-semibold text-zinc-200">{selectedFolderIds.size} folders selected</span>
-                <span className="text-zinc-600">•</span>
+                <span className="text-zinc-700 font-bold">•</span>
                 <button
                   onClick={() => setSelectedFolderIds(new Set())}
-                  className="text-red-400 hover:text-red-200 transition-colors font-semibold"
+                  className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold underline underline-offset-4 cursor-pointer"
                 >
                   Deselect All
                 </button>
@@ -703,14 +651,14 @@ export default function DashboardPage() {
               <button
                 onClick={handleDeleteSelectedFolders}
                 disabled={deletingFolders}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-red-600/10"
+                className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-750 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md w-full sm:w-auto text-center"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>{deletingFolders ? 'Deleting...' : 'Delete Selected Folders'}</span>
               </button>
             </div>
           )}
-
+ 
           {/* Grid of Folders */}
           <div className="mb-10">
             <div className="flex items-center space-x-3 mb-4">
@@ -719,7 +667,7 @@ export default function DashboardPage() {
                   onClick={toggleSelectAllFolders}
                   className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                     isAllFoldersSelected
-                      ? 'bg-red-600 border-red-500 text-white'
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
                       : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
                   }`}
                 >
@@ -737,11 +685,36 @@ export default function DashboardPage() {
                 {/* Special Card for Uncategorized */}
                 <Link
                   href="/dashboard/folder/uncategorized"
-                  className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('app-loading-start', {
+                        detail: { title: 'Loading', subtitle: 'Decrypting catalog components...' }
+                      }))
+                    }
+                  }}
+                  className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-0.5 shadow-md hover:shadow-lg hover:shadow-indigo-500/5"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-zinc-700 transition-colors">
-                      <FolderOpen className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
+                    <div className="flex items-center space-x-3">
+                      {/* Select Uncategorized Checkbox */}
+                      <div
+                        onClick={(e) => toggleSelectFolder('uncategorized', e)}
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
+                          selectedFolderIds.has('uncategorized')
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
+                        }`}
+                      >
+                        {selectedFolderIds.has('uncategorized') && (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-zinc-700 transition-colors">
+                        <FolderOpen className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
+                      </div>
                     </div>
                     <span className="text-xs bg-zinc-800/60 text-zinc-400 font-semibold px-2.5 py-1 rounded-full">
                       {getDocCount(null)} docs
@@ -763,7 +736,14 @@ export default function DashboardPage() {
                   <Link
                     key={folder.id}
                     href={`/dashboard/folder/${folder.id}`}
-                    className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all shadow-md hover:shadow-lg"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('app-loading-start', {
+                          detail: { title: 'Loading', subtitle: 'Decrypting catalog components...' }
+                        }))
+                      }
+                    }}
+                    className="group relative flex flex-col justify-between p-6 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl hover:border-zinc-700 hover:bg-zinc-900/60 transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-0.5 shadow-md hover:shadow-lg hover:shadow-indigo-500/5"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
@@ -772,7 +752,7 @@ export default function DashboardPage() {
                           onClick={(e) => toggleSelectFolder(folder.id, e)}
                           className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                             selectedFolderIds.has(folder.id)
-                            ? 'bg-red-600 border-red-500 text-white'
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
                               : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
                           }`}
                         >
@@ -782,12 +762,12 @@ export default function DashboardPage() {
                             </svg>
                           )}
                         </div>
-
-                        <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-red-500/20 transition-colors">
-                          <FolderIcon className="w-6 h-6 text-red-400 group-hover:text-red-300" />
+ 
+                        <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl group-hover:border-indigo-500/20 transition-colors">
+                          <FolderIcon className="w-6 h-6 text-indigo-400 group-hover:text-indigo-300" />
                         </div>
                       </div>
-                      <span className="text-xs bg-red-950/40 text-red-400 border border-red-950 font-semibold px-2.5 py-1 rounded-full">
+                      <span className="text-xs bg-indigo-950/40 text-indigo-400 border border-indigo-950 font-semibold px-2.5 py-1 rounded-full">
                         {getDocCount(folder.id)} docs
                       </span>
                     </div>
@@ -806,16 +786,16 @@ export default function DashboardPage() {
           </div>
 
           {/* Drag & Drop Upload Zone */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:items-stretch">
+            <div className="lg:col-span-2 flex flex-col">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Upload Documents</h2>
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 text-center transition-all min-h-[250px] ${
+                className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-10 text-center transition-all flex-1 min-h-[250px] ${
                   isDragOver
-                    ? 'border-red-500 bg-red-500/5'
+                    ? 'border-indigo-500 bg-indigo-500/5'
                     : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/30'
                 }`}
               >
@@ -823,18 +803,18 @@ export default function DashboardPage() {
                   type="file"
                   id="file-upload"
                   multiple
-                  accept="application/pdf,image/png,image/jpeg,image/jpg"
+                  accept="application/pdf,image/png,image/jpeg,image/jpg,.docx,.doc,.csv,.xlsx,.pptx,.ppt,.txt"
                   onChange={(e) => handleFilesSelected(e.target.files)}
                   className="hidden"
                 />
                 
                 <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl mb-4">
-                  <UploadCloud className="w-8 h-8 text-red-400" />
+                  <UploadCloud className="w-8 h-8 text-indigo-400" />
                 </div>
                 
                 <h3 className="font-semibold text-zinc-200">Drag & Drop Files Here</h3>
                 <p className="text-xs text-zinc-500 max-w-sm mt-2">
-                  Supports PDFs and images (PNG, JPEG, JPG) of any size and length.
+                  Supports PDF, PNG, JPG, DOCX, CSV, XLSX, PPTX, PPT, TXT.
                 </p>
 
                 {/* Destination Folder Selector */}
@@ -844,7 +824,7 @@ export default function DashboardPage() {
                     <select
                       value={uploadTargetFolderId}
                       onChange={(e) => setUploadTargetFolderId(e.target.value)}
-                      className="bg-zinc-950 border border-zinc-850 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 appearance-none cursor-pointer pr-10 transition-all font-medium"
+                      className="bg-zinc-950 border border-zinc-850 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none cursor-pointer pr-10 transition-all font-medium"
                     >
                       <option value="auto">⚡ Auto-categorize with AI</option>
                       <option value="uncategorized">📁 Uncategorized</option>
@@ -873,67 +853,163 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
+
+              {/* System Constraints Details Grid */}
+              <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-3.5 bg-zinc-900/10 border border-zinc-850 rounded-xl space-y-1.5 flex flex-col justify-center text-left">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Max File Size</span>
+                  <span className="text-xs font-extrabold text-indigo-400">50 MB per file</span>
+                </div>
+                <div className="p-3.5 bg-zinc-900/10 border border-zinc-850 rounded-xl space-y-1.5 flex flex-col justify-center text-left">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Formats</span>
+                  <span className="text-xs font-extrabold text-zinc-300 whitespace-normal break-words">PDF, Images, Office (Word/PPT/Excel), CSV, TXT</span>
+                </div>
+                <div className="p-3.5 bg-zinc-900/10 border border-zinc-850 rounded-xl space-y-1.5 flex flex-col justify-center text-left">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AI Scanner limit</span>
+                  <span className="text-xs font-extrabold text-zinc-400">Unlimited Pages</span>
+                </div>
+                <div className="p-3.5 bg-zinc-900/10 border border-zinc-850 rounded-xl space-y-1.5 flex flex-col justify-center text-left">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Security layer</span>
+                  <span className="text-xs font-extrabold text-emerald-400">Private & Secured</span>
+                </div>
+              </div>
             </div>
 
             {/* Upload Queue Panel */}
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-6 flex flex-col">
+            <div className="flex flex-col">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-4">Processing Queue</h2>
-              {uploadQueue.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-                  <FileText className="w-10 h-10 text-zinc-700 mb-3" />
-                  <p className="text-zinc-500 text-sm">No active uploads</p>
-                  <p className="text-xs text-zinc-600 mt-1">Uploaded files will queue here.</p>
-                </div>
-              ) : (
-                <div className="flex-1 space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                  {uploadQueue.map((item) => (
-                    <div key={item.id} className="p-3 bg-zinc-950 border border-zinc-900 rounded-xl space-y-2">
-                      <div className="flex items-start justify-between">
-                        <p className="text-xs text-zinc-300 font-medium truncate max-w-[180px]">{item.fileName}</p>
-                        {item.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                        {item.status === 'failed' && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
-                        {item.status !== 'done' && item.status !== 'failed' && (
-                          <Loader2 className="w-4 h-4 animate-spin text-red-500 flex-shrink-0" />
-                        )}
-                      </div>
-                      
-                      {/* Status Indicator */}
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-zinc-500 uppercase tracking-wider font-semibold">
-                          {item.status === 'uploading' && 'Uploading...'}
-                          {item.status === 'ocr' && 'Extracting text (OCR)...'}
-                          {item.status === 'categorizing' && 'Auto-categorizing...'}
-                          {item.status === 'done' && (
-                            <span>
-                              Processed • Saved in <strong className="text-red-400 font-bold">{item.folderName || 'Uncategorized'}</strong>
+              <div className="flex-1 bg-zinc-900/20 border border-zinc-850 rounded-2xl p-6 flex flex-col min-h-[300px] lg:min-h-0 lg:max-h-[440px]">
+                {uploadQueue.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
+                    <FileText className="w-10 h-10 text-zinc-700 mb-3" />
+                    <p className="text-zinc-500 text-sm">No active uploads</p>
+                    <p className="text-xs text-zinc-600 mt-1">Uploaded files will queue here.</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                    {uploadQueue.map((item) => (
+                      <div key={item.id} className="p-3.5 bg-zinc-950 border border-zinc-900 rounded-xl space-y-2.5 shadow-sm flex flex-col justify-between">
+                        <div className="flex items-center justify-between gap-4">
+                          {item.status === 'done' && item.docId ? (
+                            <Link
+                              href={`/dashboard/document/${item.docId}`}
+                              onClick={() => {
+                                if (typeof window !== 'undefined') {
+                                  window.dispatchEvent(new CustomEvent('app-loading-start', {
+                                    detail: { title: 'Loading Document', subtitle: 'Decrypting secure document contents...' }
+                                  }))
+                                }
+                              }}
+                              className="text-xs text-zinc-300 hover:text-indigo-400 font-semibold truncate max-w-[190px] hover:underline"
+                              title={`Open ${item.fileName}`}
+                            >
+                              {item.fileName}
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-zinc-300 font-medium truncate max-w-[190px]" title={item.fileName}>
+                              {item.fileName}
                             </span>
                           )}
-                          {item.status === 'failed' && 'Failed'}
-                        </span>
-                      </div>
+                          <div className="flex items-center space-x-2 flex-shrink-0">
+                            {item.status === 'done' && (
+                              <div className="flex items-center space-x-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                <button
+                                  onClick={() => setUploadQueue((prev) => prev.filter((q) => q.id !== item.id))}
+                                  className="p-0.5 text-zinc-650 hover:text-zinc-400 hover:bg-zinc-900 rounded transition-all cursor-pointer"
+                                  title="Dismiss"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                            {item.status === 'failed' && (
+                              <div className="flex items-center space-x-1.5">
+                                <AlertTriangle className="w-4 h-4 text-red-500" />
+                                <button
+                                  onClick={() => setUploadQueue((prev) => prev.filter((q) => q.id !== item.id))}
+                                  className="p-0.5 text-zinc-650 hover:text-zinc-400 hover:bg-zinc-900 rounded transition-all cursor-pointer"
+                                  title="Dismiss"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                            {item.status !== 'done' && item.status !== 'failed' && (
+                              <div className="flex items-center space-x-1.5">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                                <button
+                                  onClick={() => cancelUpload(item.id)}
+                                  className="p-0.5 text-zinc-550 hover:text-zinc-300 hover:bg-zinc-900 rounded transition-all cursor-pointer"
+                                  title="Cancel Upload"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Status Indicator */}
+                        <div className="flex items-center text-[10px] min-h-[16px]">
+                          {item.status === 'done' ? (
+                            <div className="flex items-center w-full gap-2 flex-nowrap overflow-hidden">
+                              <span className="flex items-center gap-1 text-zinc-400 text-[10px] min-w-0 flex-1 overflow-hidden">
+                                <span className="uppercase text-[9px] tracking-wider text-zinc-500 font-semibold whitespace-nowrap flex-shrink-0">Processed • Saved in</span>
+                                <strong className="text-indigo-400 font-bold text-xs truncate">{item.folderName || 'Uncategorized'}</strong>
+                              </span>
+                              {item.docId && (
+                                <Link
+                                  href={`/dashboard/document/${item.docId}`}
+                                  onClick={() => {
+                                    if (typeof window !== 'undefined') {
+                                      window.dispatchEvent(new CustomEvent('app-loading-start', {
+                                        detail: { title: 'Loading Document', subtitle: 'Decrypting secure document contents...' }
+                                      }))
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-0.5 text-[10px] text-indigo-400 hover:text-indigo-300 font-bold hover:underline transition-colors flex-shrink-0"
+                                >
+                                  <span>Open</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </Link>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-500 uppercase tracking-wider font-semibold text-[9px]">
+                              {item.status === 'queued' && 'Queued...'}
+                              {item.status === 'uploading' && 'Uploading...'}
+                              {item.status === 'ocr' && 'Extracting text (OCR)...'}
+                              {item.status === 'categorizing' && 'Auto-categorizing...'}
+                              {item.status === 'failed' && 'Failed'}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Progress bar simulation */}
-                      <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            item.status === 'uploading' ? 'w-1/4 bg-red-500' :
-                            item.status === 'ocr' ? 'w-2/3 bg-red-500' :
-                            item.status === 'categorizing' ? 'w-11/12 bg-red-500' :
-                            item.status === 'done' ? 'w-full bg-emerald-500' :
-                            'w-full bg-red-500'
-                          }`}
-                        />
-                      </div>
+                        {/* Progress bar simulation */}
+                        <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              item.status === 'queued' ? 'w-1/12 bg-zinc-800' :
+                              item.status === 'uploading' ? 'w-1/4 bg-indigo-500' :
+                              item.status === 'ocr' ? 'w-2/3 bg-indigo-500' :
+                              item.status === 'categorizing' ? 'w-11/12 bg-indigo-500' :
+                              item.status === 'done' ? 'w-full bg-emerald-500' :
+                              'w-full bg-indigo-500'
+                            }`}
+                          />
+                        </div>
 
-                      {item.error && (
-                        <p className="text-[10px] text-red-400 mt-1 line-clamp-2 leading-relaxed">
-                          {item.error}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                        {item.error && (
+                          <p className="text-[10px] text-red-400 mt-1 line-clamp-2 leading-relaxed">
+                            {item.error}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -948,7 +1024,7 @@ export default function DashboardPage() {
             
             <form onSubmit={handleCreateFolder} className="space-y-4">
               {folderError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-lg">
+                <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs p-3 rounded-lg">
                   {folderError}
                 </div>
               )}
@@ -960,7 +1036,7 @@ export default function DashboardPage() {
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="e.g. Invoices"
-                className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 text-sm"
+                className="block w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 text-sm"
               />
               
               <div className="flex space-x-3 pt-2">
@@ -978,7 +1054,7 @@ export default function DashboardPage() {
                 <button
                   type="submit"
                   disabled={folderSubmitting}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-red-500/20 disabled:opacity-50 cursor-pointer"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {folderSubmitting ? 'Creating...' : 'Create Folder'}
                 </button>
@@ -1013,7 +1089,7 @@ export default function DashboardPage() {
               />
               {!cameraStream && (
                 <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm">
-                  <Loader2 className="w-6 h-6 animate-spin mr-2 text-red-500" />
+                  <Loader2 className="w-6 h-6 animate-spin mr-2 text-indigo-500" />
                   <span>Requesting camera permission...</span>
                 </div>
               )}
@@ -1033,7 +1109,7 @@ export default function DashboardPage() {
                 type="button"
                 onClick={capturePhoto}
                 disabled={!cameraStream}
-                className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-red-500/20 disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
                 <span>Capture Photo</span>
@@ -1043,90 +1119,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Duplicate File Conflict Modal */}
-      {duplicateFile && duplicateExistingDoc && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-md px-4 animate-fade-in">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-6 space-y-6">
-            <div className="flex items-center space-x-3 text-red-400">
-              <AlertTriangle className="w-6 h-6 flex-shrink-0" />
-              <h3 className="text-lg font-bold text-white">Duplicate File Detected</h3>
-            </div>
 
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              A file named <strong className="text-zinc-200">"{duplicateFile.name}"</strong> already exists in your collection. What would you like to do?
-            </p>
 
-            <div className="flex flex-col space-y-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const docToReplace = duplicateExistingDoc
-                  const fileToUpload = duplicateFile
-                  const nextQueue = [...pendingUploadsQueue]
-
-                  setDuplicateFile(null)
-                  setDuplicateExistingDoc(null)
-                  setPendingUploadsQueue([])
-
-                  uploadFile(fileToUpload, docToReplace.id)
-                  processUploadQueue(nextQueue)
-                }}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-semibold rounded-xl text-xs transition-all shadow-md shadow-red-500/25 cursor-pointer text-center"
-              >
-                Replace Existing version
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const file = duplicateFile
-                  const nextQueue = [...pendingUploadsQueue]
-
-                  setDuplicateFile(null)
-                  setDuplicateExistingDoc(null)
-                  setPendingUploadsQueue([])
-
-                  const dotIndex = file.name.lastIndexOf('.')
-                  let baseName = file.name
-                  let extension = ''
-                  if (dotIndex !== -1) {
-                    baseName = file.name.substring(0, dotIndex)
-                    extension = file.name.substring(dotIndex)
-                  }
-                  
-                  let counter = 1
-                  let newName = `${baseName} (${counter})${extension}`
-                  while (documents.some(d => d.file_name.toLowerCase() === newName.toLowerCase())) {
-                    counter++
-                    newName = `${baseName} (${counter})${extension}`
-                  }
-
-                  const renamedFile = new File([file], newName, { type: file.type })
-                  uploadFile(renamedFile)
-                  processUploadQueue(nextQueue)
-                }}
-                className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white font-semibold rounded-xl text-xs border border-zinc-750 transition-all cursor-pointer text-center"
-              >
-                Keep Both (rename to copy)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const nextQueue = [...pendingUploadsQueue]
-                  setDuplicateFile(null)
-                  setDuplicateExistingDoc(null)
-                  setPendingUploadsQueue([])
-                  processUploadQueue(nextQueue)
-                }}
-                className="w-full py-2.5 px-4 bg-transparent hover:bg-zinc-850/50 text-zinc-500 hover:text-zinc-300 font-semibold rounded-xl text-xs transition-all cursor-pointer text-center"
-              >
-                Skip Upload
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Reusable ConfirmModal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

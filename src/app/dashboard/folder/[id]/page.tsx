@@ -19,7 +19,9 @@ import {
   Search,
   X
 } from 'lucide-react'
-import VelocityLoader from '@/components/VelocityLoader'
+import ConfirmModal from '@/components/ConfirmModal'
+import SearchInput from '@/components/SearchInput'
+import DocumentRow from '@/components/DocumentRow'
 
 interface DBFolder {
   id: string
@@ -38,29 +40,9 @@ interface DBDocument {
   ocr_text: string | null
   description: string | null
   signedUrl?: string | null
+  thumbnailError?: boolean
 }
 
-function highlightText(text: string, highlight: string) {
-  if (!highlight.trim()) {
-    return <span>{text}</span>
-  }
-  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`(${escapedHighlight})`, 'gi')
-  const parts = text.split(regex)
-  return (
-    <span>
-      {parts.map((part, i) =>
-        regex.test(part) ? (
-          <mark key={i} className="bg-red-500/30 text-red-300 px-1 py-0.5 rounded font-bold">
-            {part}
-          </mark>
-        ) : (
-          part
-        )
-      )}
-    </span>
-  )
-}
 
 export default function FolderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params)
@@ -72,6 +54,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   const [folder, setFolder] = useState<DBFolder | null>(null)
   const [documents, setDocuments] = useState<DBDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingSubtitle, setLoadingSubtitle] = useState("Decrypting catalog components...")
 
   // Actions states
   const [isRenaming, setIsRenaming] = useState(false)
@@ -79,8 +62,18 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   const [renameError, setRenameError] = useState('')
   const [renameSubmitting, setRenameSubmitting] = useState(false)
 
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  // Custom confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void | Promise<void>
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  })
 
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingAll, setDeletingAll] = useState(false)
@@ -89,7 +82,15 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   const filteredDocs = documents.filter((doc) => {
     const nameMatch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
     const contentMatch = doc.ocr_text && doc.ocr_text.toLowerCase().includes(searchQuery.toLowerCase())
-    const descMatch = doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    let plainDescription = doc.description || ''
+    if (plainDescription.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(plainDescription)
+        plainDescription = (parsed.short_summary || '') + ' ' + (parsed.document_title || '') + ' ' + (parsed.final_category || '') + ' ' + (parsed.primary_entity || '')
+      } catch (e) {}
+    }
+    const descMatch = plainDescription && plainDescription.toLowerCase().includes(searchQuery.toLowerCase())
     return nameMatch || contentMatch || descMatch
   })
 
@@ -124,26 +125,37 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     })
   }
 
-  const handleDeleteSelected = async () => {
-    if (!confirm(`Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`)) return
-    setDeletingSelected(true)
+  const handleDeleteSelected = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Selected Documents?',
+      message: `Are you sure you want to permanently delete the ${selectedIds.size} selected documents? This cannot be undone.`,
+      onConfirm: async () => {
+        setDeletingSelected(true)
+        try {
+          const deletePromises = Array.from(selectedIds).map(id =>
+            fetch(`/api/documents/${id}`, { method: 'DELETE' })
+          )
+          await Promise.all(deletePromises)
 
-    try {
-      const deletePromises = Array.from(selectedIds).map(id =>
-        fetch(`/api/documents/${id}`, { method: 'DELETE' })
-      )
-      await Promise.all(deletePromises)
-
-      setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
-      setSelectedIds(new Set())
-    } catch (err: any) {
-      alert('Error deleting documents: ' + err.message)
-    } finally {
-      setDeletingSelected(false)
-    }
+          setDocuments(prev => prev.filter(doc => !selectedIds.has(doc.id)))
+          setSelectedIds(new Set())
+        } catch (err: any) {
+          alert('Error deleting documents: ' + err.message)
+        } finally {
+          setDeletingSelected(false)
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
+      }
+    })
   }
 
   const loadData = useCallback(async () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app-loading-start', {
+        detail: { title: 'Loading Folder', subtitle: 'Decrypting catalog components...' }
+      }))
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -188,11 +200,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
 
       if (docsData && docsData.length > 0) {
-        const paths = docsData.map((d: any) =>
-          d.file_type?.startsWith('image/') || d.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(d.file_name)
-            ? `${user.id}/previews/${d.id}.png`
-            : d.storage_path
-        )
+        const paths = docsData.map((d: any) => `${user.id}/previews/${d.id}.png`)
 
         try {
           const { data: signedUrls } = await supabase.storage
@@ -201,9 +209,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           
           if (signedUrls) {
             docsWithUrls = docsData.map((doc: any) => {
-              const targetPath = doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)
-                ? `${user.id}/previews/${doc.id}.png`
-                : doc.storage_path
+              const targetPath = `${user.id}/previews/${doc.id}.png`
               const match = signedUrls.find((s) => s.path === targetPath)
               return {
                 ...doc,
@@ -216,6 +222,36 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
         }
       }
 
+      // Preload all thumbnail images to prevent blank squares
+      if (docsWithUrls && docsWithUrls.length > 0) {
+        try {
+          const preloadPromises = docsWithUrls.map(d => {
+            const hasThumbnail = !!d.signedUrl
+            if (!hasThumbnail) return Promise.resolve()
+            
+            return new Promise<void>((resolve) => {
+              const img = new Image()
+              img.src = d.signedUrl!
+              const timer = setTimeout(() => {
+                resolve()
+              }, 2000)
+              img.onload = () => {
+                clearTimeout(timer)
+                resolve()
+              }
+              img.onerror = () => {
+                clearTimeout(timer)
+                d.thumbnailError = true
+                resolve()
+              }
+            })
+          })
+          await Promise.all(preloadPromises)
+        } catch (preloadErr) {
+          console.warn('Thumbnail preloading failed:', preloadErr)
+        }
+      }
+
       setDocuments(docsWithUrls)
       setSelectedIds(new Set())
     } catch (err) {
@@ -223,6 +259,10 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       router.push('/dashboard')
     } finally {
       setLoading(false)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-loading-stop'))
+        sessionStorage.removeItem('next_loading_type')
+      }
     }
   }, [supabase, id, isUncategorized, router])
 
@@ -262,80 +302,100 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
     }
   }
 
-  // Handle Delete Folder
-  const handleDelete = async () => {
-    setDeleteSubmitting(true)
+  // Handle Delete Folder Confirmation Trigger
+  const triggerDeleteFolderConfirm = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Folder?',
+      message: 'WARNING: Deletions are permanent. Deleting this folder will permanently delete ALL documents inside it from the database and storage. This cannot be undone.',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/folders/${id}`, {
+            method: 'DELETE',
+          })
 
-    try {
-      const response = await fetch(`/api/folders/${id}`, {
-        method: 'DELETE',
-      })
+          if (!response.ok) {
+            const result = await response.json()
+            throw new Error(result.error || 'Failed to delete folder')
+          }
 
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to delete folder')
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app-loading-start', {
+              detail: { title: 'Deleting Folder', subtitle: 'Permanently purging folder assets...' }
+            }))
+          }
+          setLoading(true)
+          router.push('/dashboard')
+          router.refresh()
+        } catch (err) {
+          console.error('Delete folder failed:', err)
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
       }
-
-      router.push('/dashboard')
-      router.refresh()
-    } catch (err) {
-      console.error('Delete folder failed:', err)
-      setDeleteSubmitting(false)
-      setIsDeleting(false)
-    }
+    })
   }
 
   // Handle Delete Document
-  const handleDeleteDoc = async (e: React.MouseEvent, docId: string) => {
+  const handleDeleteDoc = (e: React.MouseEvent, docId: string) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this document permanently?')) return
-
-    try {
-      const response = await fetch(`/api/documents/${docId}`, {
-        method: 'DELETE',
-      })
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to delete document')
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Document?',
+      message: 'Are you sure you want to delete this document permanently? This cannot be undone.',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/documents/${docId}`, {
+            method: 'DELETE',
+          })
+          if (!response.ok) {
+            const result = await response.json()
+            throw new Error(result.error || 'Failed to delete document')
+          }
+          setDocuments((prev) => prev.filter((d) => d.id !== docId))
+        } catch (err: any) {
+          alert(err.message)
+        } finally {
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
       }
-      setDocuments((prev) => prev.filter((d) => d.id !== docId))
-    } catch (err: any) {
-      alert(err.message)
-    }
+    })
   }
 
   // Handle Delete All Documents in Uncategorized/Folder
-  const handleDeleteAllDocs = async () => {
-    if (!confirm('Are you sure you want to delete ALL documents in this folder? This action cannot be undone.')) return
-    setDeletingAll(true)
+  const handleDeleteAllDocs = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete All Documents?',
+      message: 'Are you sure you want to delete ALL documents in this folder? This action cannot be undone.',
+      onConfirm: async () => {
+        setDeletingAll(true)
+        try {
+          const response = await fetch(`/api/folders/${id}/documents`, {
+            method: 'DELETE',
+          })
 
-    try {
-      const response = await fetch(`/api/folders/${id}/documents`, {
-        method: 'DELETE',
-      })
+          if (!response.ok) {
+            const result = await response.json()
+            throw new Error(result.error || 'Failed to delete documents')
+          }
 
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to delete documents')
+          setDocuments([])
+          setSearchQuery('')
+        } catch (err: any) {
+          alert(err.message)
+        } finally {
+          setDeletingAll(false)
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        }
       }
-
-      setDocuments([])
-      setSearchQuery('')
-    } catch (err: any) {
-      alert(err.message)
-    } finally {
-      setDeletingAll(false)
-    }
+    })
   }
 
   if (loading) {
-    return (
-      <VelocityLoader
-        title="Loading Folder"
-        subtitle="Decrypting catalog components..."
-      />
-    )
+    return null
   }
 
   return (
@@ -345,7 +405,14 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
         <div className="flex items-center space-x-4 min-w-0">
           <Link
             href="/dashboard"
-            className="p-2 border border-zinc-800 bg-zinc-900/40 rounded-xl text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('app-loading-start', {
+                  detail: { title: 'Loading', subtitle: 'Decrypting catalog structure...' }
+                }))
+              }
+            }}
+            className="p-2 border border-zinc-800 bg-zinc-900/40 rounded-xl text-zinc-400 hover:text-zinc-200 transition-all duration-200 ease-out hover:scale-[1.05] active:scale-[0.95] flex-shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -365,12 +432,12 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                   required
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
-                  className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 text-lg focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
                 <button
                   type="submit"
                   disabled={renameSubmitting}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   {renameSubmitting ? 'Saving...' : 'Save'}
                 </button>
@@ -411,7 +478,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
             <button
               onClick={handleDeleteAllDocs}
               disabled={deletingAll}
-              className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center space-x-2 px-3 py-2 border border-indigo-500/20 bg-indigo-950/10 hover:bg-indigo-950/20 text-indigo-400 rounded-xl text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
               <span>{deletingAll ? 'Deleting All...' : 'Delete All Docs'}</span>
@@ -419,8 +486,8 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           )
         ) : (
           <button
-            onClick={() => setIsDeleting(true)}
-            className="flex items-center space-x-2 px-3 py-2 border border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+            onClick={triggerDeleteFolderConfirm}
+            className="flex items-center space-x-2 px-3 py-2 border border-indigo-500/20 bg-indigo-950/10 hover:bg-indigo-950/20 text-indigo-400 rounded-xl text-sm font-semibold transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
             <span className="inline">Delete Folder</span>
@@ -429,36 +496,21 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Search Input Bar */}
-      <div className="relative max-w-xl">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-500">
-          <Search className="w-5 h-5" />
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search this folder by name or content..."
-          className="block w-full pl-11 pr-10 py-2.5 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+      <SearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search this folder by name or content..."
+      />
 
       {/* Bulk actions banner */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between p-4 bg-red-950/20 border border-red-900/40 rounded-2xl mb-4 text-sm text-red-300 animate-fade-in">
-          <div className="flex items-center space-x-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-2xl mb-4 text-sm text-indigo-300 animate-fade-in gap-3">
+          <div className="flex items-center justify-center space-x-3 w-full sm:w-auto">
             <span className="font-semibold text-zinc-200">{selectedIds.size} items selected</span>
-            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-700 font-bold">•</span>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="text-red-400 hover:text-red-200 transition-colors font-semibold"
+              className="text-indigo-400 hover:text-indigo-200 transition-colors font-semibold underline underline-offset-4 cursor-pointer"
             >
               Deselect All
             </button>
@@ -466,7 +518,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           <button
             onClick={handleDeleteSelected}
             disabled={deletingSelected}
-            className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-red-600/10"
+            className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-750 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md w-full sm:w-auto text-center"
           >
             <Trash2 className="w-4 h-4" />
             <span>{deletingSelected ? 'Deleting...' : 'Delete Selected'}</span>
@@ -483,7 +535,7 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
                 onClick={toggleSelectAll}
                 className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
                   isAllSelected
-                    ? 'bg-red-600 border-red-500 text-white'
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
                     : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'
                 }`}
               >
@@ -511,160 +563,57 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
           </div>
         ) : (
           <div className="divide-y divide-zinc-900">
-            {filteredDocs.map((doc) => (
-              <Link
-                key={doc.id}
-                href={`/dashboard/document/${doc.id}`}
-                className="group flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 hover:bg-zinc-900/30 transition-all"
-              >
-                <div className="flex items-center space-x-4 min-w-0">
-                  {/* Checkbox Select */}
-                  <div
-                    onClick={(e) => toggleSelect(doc.id, e)}
-                    className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${
-                      selectedIds.has(doc.id)
-                        ? 'bg-red-600 border-red-500 text-white'
-                        : 'border-zinc-800 bg-zinc-950 hover:border-zinc-650'
-                    }`}
-                  >
-                    {selectedIds.has(doc.id) && (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-
-                  {doc.signedUrl && (doc.file_type?.startsWith('image/') || doc.file_type === 'application/pdf' || /\.(png|jpe?g|gif|webp|pdf)$/i.test(doc.file_name)) ? (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-red-500/20 transition-all flex items-center justify-center">
-                      <img
-                        src={doc.signedUrl}
-                        alt={doc.file_name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-400 group-hover:text-red-400 group-hover:border-red-500/10 transition-all flex-shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
-                      {highlightText(doc.file_name, searchQuery)}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                      <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
-                        {doc.file_type.split('/')[1] || doc.file_type}
-                      </span>
-                      <span className="text-zinc-700 text-xs hidden sm:inline">•</span>
-                      <div className="flex items-center space-x-1 text-zinc-500 text-xs">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                      </div>
-                      {doc.partially_scanned && (
-                        <>
-                          <span className="text-zinc-700 text-xs hidden sm:inline">•</span>
-                          <span className="inline-flex items-center text-[10px] text-amber-500 bg-amber-950/20 border border-amber-950 px-1.5 py-0.5 rounded font-semibold">
-                            Partially Scanned
-                          </span>
-                        </>
-                      )}
-                      {(() => {
-                        // Context snippet
-                        let snippet = ''
-                        if (searchQuery && doc.ocr_text) {
-                          const idx = doc.ocr_text.toLowerCase().indexOf(searchQuery.toLowerCase())
-                          if (idx !== -1) {
-                            const start = Math.max(0, idx - 20)
-                            const end = Math.min(doc.ocr_text.length, idx + 50)
-                            snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
-                          }
-                        }
-                        if (searchQuery && !snippet && doc.description) {
-                          const idx = doc.description.toLowerCase().indexOf(searchQuery.toLowerCase())
-                          if (idx !== -1) {
-                            const start = Math.max(0, idx - 20)
-                            const end = Math.min(doc.description.length, idx + 50)
-                            snippet = (start > 0 ? '...' : '') + doc.description.substring(start, end).replace(/\n/g, ' ') + (end < doc.description.length ? '...' : '')
-                          }
-                        }
-                        return snippet ? (
-                          <>
-                            <span className="text-zinc-700 text-xs hidden sm:inline">•</span>
-                            <span className="italic text-[11px] text-zinc-400 max-w-[200px] sm:max-w-[350px] truncate">
-                              {highlightText(snippet, searchQuery)}
-                            </span>
-                          </>
-                        ) : null
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status Badge & Actions */}
-                <div className="flex items-center justify-between sm:justify-end mt-4 sm:mt-0 space-x-4">
-                  <span
-                    className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold border ${
-                      doc.status === 'done'
-                        ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/30'
-                        : doc.status === 'failed'
-                        ? 'bg-red-950/20 text-red-400 border-red-900/30'
-                        : 'bg-red-950/20 text-red-400 border-red-900/30 animate-pulse'
-                    }`}
-                  >
-                    {doc.status === 'done' && 'Ready'}
-                    {doc.status === 'failed' && 'Failed'}
-                    {doc.status === 'processing' && 'Processing...'}
-                  </span>
-                  
-                  <button
-                    onClick={(e) => handleDeleteDoc(e, doc.id)}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-950/20 border border-transparent hover:border-red-900/30 rounded-lg transition-all cursor-pointer flex-shrink-0"
-                    title="Delete Document"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  
-                  <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all hidden sm:block flex-shrink-0" />
-                </div>
-              </Link>
-            ))}
+            {filteredDocs.map((doc) => {
+              // Context snippet
+              let snippet = ''
+              if (searchQuery && doc.ocr_text) {
+                const idx = doc.ocr_text.toLowerCase().indexOf(searchQuery.toLowerCase())
+                if (idx !== -1) {
+                  const start = Math.max(0, idx - 20)
+                  const end = Math.min(doc.ocr_text.length, idx + 50)
+                  snippet = (start > 0 ? '...' : '') + doc.ocr_text.substring(start, end).replace(/\n/g, ' ') + (end < doc.ocr_text.length ? '...' : '')
+                }
+              }
+              if (searchQuery && !snippet && doc.description) {
+                let plainDescription = doc.description || ''
+                if (plainDescription.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(plainDescription)
+                    plainDescription = parsed.short_summary || parsed.description || ''
+                  } catch (e) {}
+                }
+                const idx = plainDescription.toLowerCase().indexOf(searchQuery.toLowerCase())
+                if (idx !== -1) {
+                  const start = Math.max(0, idx - 20)
+                  const end = Math.min(plainDescription.length, idx + 50)
+                  snippet = (start > 0 ? '...' : '') + plainDescription.substring(start, end).replace(/\n/g, ' ') + (end < plainDescription.length ? '...' : '')
+                }
+              }
+              
+              return (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc as any}
+                  selectedIds={selectedIds}
+                  toggleSelect={toggleSelect}
+                  handleDeleteDoc={handleDeleteDoc}
+                  searchQuery={searchQuery}
+                  snippet={snippet}
+                />
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Delete Folder Modal */}
-      {isDeleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-2">Delete Folder?</h3>
-            
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-start space-x-3 mb-6">
-              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <p className="text-xs leading-relaxed font-semibold">
-                WARNING: Deletions are permanent. Deleting this folder will permanently delete ALL documents inside it from the database and storage. This cannot be undone.
-              </p>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                type="button"
-                onClick={() => setIsDeleting(false)}
-                className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteSubmitting}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-red-600/20 disabled:opacity-50 cursor-pointer"
-              >
-                {deleteSubmitting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Reusable ConfirmModal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

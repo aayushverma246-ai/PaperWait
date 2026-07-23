@@ -39,10 +39,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const storagePaths = docs.map((doc) => doc.storage_path)
       const docIds = docs.map((doc) => doc.id)
 
+      const storagePathsToDelete = [...storagePaths]
+      docs.forEach((doc) => {
+        storagePathsToDelete.push(`${user.id}/previews/${doc.id}.png`)
+      })
+
       // 2. Delete files from Supabase Storage
       const { error: storageError } = await supabase.storage
         .from('documents')
-        .remove(storagePaths)
+        .remove(storagePathsToDelete)
 
       if (storageError) {
         console.error('Failed to delete files from storage:', storageError)

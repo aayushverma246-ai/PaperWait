@@ -19,6 +19,11 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setErrorMsg('')
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app-loading-start', {
+        detail: { title: 'Authenticating', subtitle: 'Establishing secure session...' }
+      }))
+    }
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -28,26 +33,32 @@ export default function LoginPage() {
 
       if (error) {
         setErrorMsg(error.message)
+        setLoading(false)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('app-loading-stop'))
+        }
       } else {
         router.push('/dashboard')
         router.refresh()
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred.')
-    } finally {
       setLoading(false)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-loading-stop'))
+      }
     }
   }
 
   return (
     <div className="relative min-h-screen flex flex-col justify-center items-center bg-[#09090b] px-4 overflow-hidden">
       {/* Background ambient glowing blobs */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-red-500/10 blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-rose-500/10 blur-3xl" />
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-violet-500/10 blur-3xl" />
 
       <div className="w-full max-w-md z-10">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-500 to-rose-600 shadow-lg shadow-red-500/30 mb-4 animate-pulse">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30 mb-4 animate-pulse">
             <FileText className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
@@ -57,15 +68,15 @@ export default function LoginPage() {
             Sign in to access your intelligent documents
           </p>
         </div>
-
-        <div className="bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl p-8 rounded-2xl shadow-xl">
+ 
+        <div className="bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl p-8 rounded-2xl shadow-xl animate-slide-up">
           <form onSubmit={handleLogin} className="space-y-6">
             {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg">
+              <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm p-3 rounded-lg">
                 {errorMsg}
               </div>
             )}
-
+ 
             <div>
               <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
                 Email Address
@@ -80,11 +91,11 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm"
+                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm"
                 />
               </div>
             </div>
-
+ 
             <div>
               <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
                 Password
@@ -99,15 +110,15 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm"
+                  className="block w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm"
                 />
               </div>
             </div>
-
+ 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all shadow-md shadow-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 active:scale-95 duration-100 text-white rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer font-bold"
             >
               {loading ? (
                 <>
@@ -119,11 +130,11 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
+ 
           <div className="mt-6 text-center">
             <p className="text-zinc-500 text-sm">
               Don't have an account?{' '}
-              <Link href="/signup" className="text-red-400 hover:text-red-300 font-medium transition-colors">
+              <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
                 Sign Up
               </Link>
             </p>

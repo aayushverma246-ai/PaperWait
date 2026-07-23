@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.documents (
   storage_path TEXT NOT NULL,
   file_type TEXT NOT NULL,
   ocr_text TEXT,
+  description TEXT,
   status TEXT NOT NULL DEFAULT 'processing',
   partially_scanned BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

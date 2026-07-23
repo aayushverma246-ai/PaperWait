@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import GlobalRouteLoader from "@/components/GlobalRouteLoader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PaperWeights - Intelligent Document Organizer",
-  description: "Organize your documents intelligently with Nemotron OCR and LLM auto-categorization.",
+  title: "PaperWait",
+  description: "PaperWait: because waiting to find it isn't an option.",
 };
 
 export default function RootLayout({
@@ -27,7 +28,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <GlobalRouteLoader />
+        {children}
+      </body>
     </html>
   );
 }

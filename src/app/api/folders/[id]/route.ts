@@ -18,13 +18,22 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const { name } = await request.json()
-    if (!name || name.trim() === '') {
+    if (!name || typeof name !== 'string' || name.trim() === '') {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 })
+    }
+
+    const sanitizedName = name
+      .replace(/<[^>]*>/g, '') // strip HTML tags
+      .trim()
+      .substring(0, 100) // max length
+
+    if (sanitizedName === '') {
+      return NextResponse.json({ error: 'Invalid folder name' }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from('folders')
-      .update({ name: name.trim() })
+      .update({ name: sanitizedName })
       .eq('id', id)
       .eq('user_id', user.id) // Ensure security boundary
       .select()
@@ -70,10 +79,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const storagePaths = docs.map((d) => d.storage_path)
       const docIds = docs.map((d) => d.id)
 
+      // Add all preview paths to the deletion queue
+      const storagePathsToDelete = [...storagePaths]
+      docs.forEach((doc) => {
+        storagePathsToDelete.push(`${user.id}/previews/${doc.id}.png`)
+      })
+
       // 2. Delete from Supabase Storage
       const { error: storageError } = await supabase.storage
         .from('documents')
-        .remove(storagePaths)
+        .remove(storagePathsToDelete)
 
       if (storageError) {
         console.error('Failed to delete files from storage:', storageError)

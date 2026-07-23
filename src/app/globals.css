@@ -1,16 +1,30 @@
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500,400&f[]=satoshi@500,700,400&display=swap');
 @import "tailwindcss";
+
+
+@theme {
+  --color-brand-charcoal: #171e19;
+  --color-brand-sage: #b7c6c2;
+  --color-brand-white: #ffffff;
+  --color-brand-black: #000000;
+  --color-brand-gray: #272727;
+  --color-brand-indigo: #c7d2fe;
+  
+  --font-cabinet: 'Cabinet Grotesk', var(--font-geist-sans), sans-serif;
+  --font-satoshi: 'Satoshi', var(--font-geist-sans), sans-serif;
+}
 
 :root {
   --background: #09090b;
   --foreground: #f4f4f5;
   --card: #18181b;
   --card-foreground: #f4f4f5;
-  --primary: #ef4444;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
   --border: #27272a;
-  --ring: #f87171;
+  --ring: #818cf8;
 }
 
 body {
@@ -19,6 +33,107 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   overflow-y: auto;
 }
+
+/* Custom Utilities */
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.1) 2px, transparent 2px);
+  background-size: 32px 32px;
+}
+
+.bg-dark-grid {
+  background-image: radial-gradient(rgba(239, 68, 68, 0.06) 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.shadow-hard-sm {
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+
+.shadow-hard-lg {
+  box-shadow: 8px 8px 0px 0px #000000;
+}
+
+.shadow-hard-xl {
+  box-shadow: 12px 12px 0px 0px #000000;
+}
+
+.shadow-hard-sage {
+  box-shadow: 8px 8px 0px 0px #b7c6c2;
+}
+
+.shadow-hard-yellow {
+  box-shadow: 8px 8px 0px 0px #ffe17c;
+}
+
+/* Neo-Brutalist Push Buttons */
+.btn-brutal-primary {
+  background-color: #000000;
+  color: #ffffff;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #000000;
+  border-radius: 0.75rem;
+  box-shadow: 8px 8px 0px 0px #000000;
+  font-family: 'Satoshi', sans-serif;
+  font-weight: 700;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-brutal-primary:hover {
+  transform: translate(4px, 4px);
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+
+.btn-brutal-primary:active {
+  transform: translate(8px, 8px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+.btn-brutal-secondary {
+  background-color: #ffffff;
+  color: #000000;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #000000;
+  border-radius: 0.75rem;
+  box-shadow: 4px 4px 0px 0px #000000;
+  font-family: 'Satoshi', sans-serif;
+  font-weight: 700;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-brutal-secondary:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+
+.btn-brutal-secondary:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+/* Infinite Scrolling Marquee */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 20s linear infinite;
+}
+
 
 /* Custom subtle scrollbar */
 ::-webkit-scrollbar {
@@ -100,7 +215,7 @@ body {
   top: -19px;
   left: 60px;
   border-radius: 2px 10px 1px 0;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
 }
 
 .base span {
@@ -110,7 +225,7 @@ body {
   border-top: 6px solid transparent;
   border-right: 100px solid #fff;
   border-bottom: 6px solid transparent;
-  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.4));
+  filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4));
 }
 
 .base span:before {
@@ -122,7 +237,7 @@ body {
   position: absolute;
   right: -110px;
   top: -16px;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
 }
 
 .base span:after {
@@ -167,10 +282,10 @@ body {
 .loader > span > span:nth-child(4) {
   width: 30px;
   height: 1px;
-  background: #ef4444;
+  background: #6366f1;
   position: absolute;
   animation: fazer1 0.2s linear infinite;
-  box-shadow: 0 0 4px #ef4444;
+  box-shadow: 0 0 4px #6366f1;
 }
 
 .loader > span > span:nth-child(2) {
@@ -223,11 +338,37 @@ body {
 
 @keyframes progress-bar {
   0% { transform: translateX(-100%); }
-  50% { transform: translateX(50%); }
-  100% { transform: translateX(200%); }
+  100% { transform: translateX(300%); }
 }
 
 .animate-progress-bar {
-  animation: progress-bar 2s ease-in-out infinite;
+  animation: progress-bar 1.5s linear infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

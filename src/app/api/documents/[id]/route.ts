@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 interface RouteContext {
   params: Promise<{ id: string }>
 }
@@ -74,11 +76,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (fetchError || !document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
-
-    // 2. Delete from Supabase Storage
+    // 2. Delete from Supabase Storage (both document and its preview thumbnail)
+    const previewPath = `${user.id}/previews/${id}.png`
     const { error: storageError } = await supabase.storage
       .from('documents')
-      .remove([document.storage_path])
+      .remove([document.storage_path, previewPath])
 
     if (storageError) {
       console.error('Storage deletion failed:', storageError)
@@ -96,6 +98,51 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     return NextResponse.json({ success: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'An unexpected error occurred' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  const supabase = await createClient()
+
+  // Get current user session
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await context.params
+
+  try {
+    // 1. Fetch document to check ownership
+    const { data: document, error: fetchError } = await supabase
+      .from('documents')
+      .select('storage_path, file_name, file_type')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (fetchError || !document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    }
+
+    // 2. Download from storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('documents')
+      .download(document.storage_path)
+
+    if (downloadError || !fileData) {
+      return NextResponse.json({ error: 'Failed to download file from storage' }, { status: 500 })
+    }
+
+    // 3. Return raw content
+    const contentText = await fileData.text()
+    return new NextResponse(contentText, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      }
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'An unexpected error occurred' }, { status: 500 })
   }
