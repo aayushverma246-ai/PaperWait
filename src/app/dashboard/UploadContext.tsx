@@ -277,6 +277,29 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const filesToProcess: { file: File; queueId: string }[] = []
 
     for (const file of nextPending) {
+      // Detect and rename generic image files to avoid naming conflicts on upload
+      let fileToProcess = file
+      const isGenericImageName = (name: string): boolean => {
+        const lower = name.toLowerCase()
+        return (
+          lower === 'image.png' ||
+          lower === 'image.jpg' ||
+          lower === 'image.jpeg' ||
+          lower === 'image.webp' ||
+          lower === 'image.gif' ||
+          lower.startsWith('image (') || // e.g. "image (1).png"
+          lower.startsWith('camera_capture_') ||
+          lower.startsWith('captured_image_')
+        )
+      }
+
+      if (isGenericImageName(file.name)) {
+        const dotIndex = file.name.lastIndexOf('.')
+        const ext = dotIndex !== -1 ? file.name.substring(dotIndex) : '.png'
+        const uniqueName = `image_${Date.now()}_${Math.floor(Math.random() * 10000)}${ext}`
+        fileToProcess = new File([file], uniqueName, { type: file.type })
+      }
+
       // Client-side validations
       const maxSizeBytes = 50 * 1024 * 1024 // 50MB
       const allowedTypes = [
@@ -294,27 +317,27 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       ]
       
       let validationError = ''
-      if (!allowedTypes.includes(file.type)) {
+      if (!allowedTypes.includes(fileToProcess.type)) {
         validationError = 'Unsupported file format. Supported: PDF, PNG, JPG, DOCX, CSV, XLSX, PPTX, PPT, TXT'
       }
 
       if (validationError) {
         const queueId = crypto.randomUUID()
-        queueItemsToAdd.push({ id: queueId, fileName: file.name, status: 'failed', error: validationError })
+        queueItemsToAdd.push({ id: queueId, fileName: fileToProcess.name, status: 'failed', error: validationError })
         continue
       }
 
       // Check if file_name already exists in documents list
       const existingDoc = existingDocs.find(
-        (d) => d.file_name.toLowerCase() === file.name.toLowerCase()
+        (d) => d.file_name.toLowerCase() === fileToProcess.name.toLowerCase()
       )
       if (existingDoc) {
-        duplicates.push({ file, existing: existingDoc })
+        duplicates.push({ file: fileToProcess, existing: existingDoc })
       } else {
         // Prepare queued item
         const queueId = crypto.randomUUID()
-        queueItemsToAdd.push({ id: queueId, fileName: file.name, status: 'queued' })
-        filesToProcess.push({ file, queueId })
+        queueItemsToAdd.push({ id: queueId, fileName: fileToProcess.name, status: 'queued' })
+        filesToProcess.push({ file: fileToProcess, queueId })
       }
     }
 

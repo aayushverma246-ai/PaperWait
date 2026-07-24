@@ -143,10 +143,24 @@ export async function POST(request: NextRequest) {
       const supa = getServiceSupabase()
 
       try {
-        // Download the uploaded file from Supabase Storage (bypasses 4.5MB client-to-server request body limits)
-        const { data: fileData, error: downloadError } = await supa.storage
+        // Start folder prefetch and download in parallel at the very beginning of processing
+        let folders: any[] = []
+        const folderPrefetchPromise = (!manualFolderId || manualFolderId === 'auto')
+          ? supa
+              .from('folders')
+              .select('id, name')
+              .eq('user_id', userId)
+              .then(({ data, error }) => {
+                if (error) throw new Error(`Failed to fetch folders: ${error.message}`)
+                folders = data || []
+              })
+          : Promise.resolve()
+
+        const downloadPromise = supa.storage
           .from('documents')
           .download(storagePath)
+
+        const { data: fileData, error: downloadError } = await downloadPromise
 
         if (downloadError || !fileData) {
           throw new Error(`Failed to download file from Supabase Storage: ${downloadError?.message || 'Empty response'}`)
@@ -159,19 +173,6 @@ export async function POST(request: NextRequest) {
         let summaryImageBase64 = ''
         let visualSummary = ''
         let pageCount = 1
-
-        // Start folder prefetch in parallel with OCR for maximum speed
-        let folders: any[] = []
-        const folderPrefetchPromise = (!manualFolderId || manualFolderId === 'auto')
-          ? supa
-              .from('folders')
-              .select('id, name')
-              .eq('user_id', userId)
-              .then(({ data, error }) => {
-                if (error) throw new Error(`Failed to fetch folders: ${error.message}`)
-                folders = data || []
-              })
-          : Promise.resolve()
 
         if (fileType === 'application/pdf') {
           // PDF processing - Extract digital text or run OCR in a single unified step
@@ -306,22 +307,96 @@ export async function POST(request: NextRequest) {
           classificationText = `[Visual Description]: ${visualSummary}\n\n${ocrText}`
         }
 
-        // Always run classification to extract structured metadata (categories, summary, entities)
-        // Uses 3-model ensemble (Llama 8B + DeepSeek V4 Flash + Nemotron Nano Omni) with weighted voting
-        const classification = await classifyDocument(classificationText, folderNames, fileName, batchHint)
+        // Run classification and preview generation in parallel!
+        const classificationPromise = (async () => {
+          const classification = await classifyDocument(classificationText, folderNames, fileName, batchHint)
 
-        // Ensure the visual summary is set as the short summary for images, and categorize personal photos to "Photos"
-        if (visualSummary) {
-          classification.short_summary = visualSummary
-          const cleanOcr = ocrText.replace('[OCR failed for this image]', '').trim()
-          const isMiscOrPersonal = classification.final_category === 'Miscellaneous' || classification.final_category === 'Personal'
-          const isGenericFolder = !classification.suggested_folder || 
-            ['uncategorized', 'miscellaneous', 'personal'].includes(classification.suggested_folder.toLowerCase())
-          if (cleanOcr.length < 150 && isMiscOrPersonal && isGenericFolder) {
-            classification.final_category = 'Photos'
-            classification.suggested_folder = 'Photos'
+          // Ensure the visual summary is set as the short summary for images, and categorize personal photos to "Photos"
+          if (visualSummary) {
+            classification.short_summary = visualSummary
+            const cleanOcr = ocrText.replace('[OCR failed for this image]', '').trim()
+            const isMiscOrPersonal = classification.final_category === 'Miscellaneous' || classification.final_category === 'Personal'
+            const isGenericFolder = !classification.suggested_folder || 
+              ['uncategorized', 'miscellaneous', 'personal'].includes(classification.suggested_folder.toLowerCase())
+            if (cleanOcr.length < 150 && isMiscOrPersonal && isGenericFolder) {
+              classification.final_category = 'Photos'
+              classification.suggested_folder = 'Photos'
+            }
           }
-        }
+          return classification
+        })()
+
+        const previewUploadPromise = (async () => {
+          if (fileType === 'application/pdf' && summaryImageBase64) {
+            try {
+              const base64Data = summaryImageBase64.replace(/^data:image\/\w+;base64,/, '')
+              const previewBuffer = Buffer.from(base64Data, 'base64')
+              await supa.storage
+                .from('documents')
+                .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
+                  contentType: 'image/jpeg',
+                  upsert: true,
+                })
+              console.log(`Uploaded PDF preview for document ${finalDocId}`)
+            } catch (previewErr) {
+              console.error('Failed to upload PDF preview thumbnail:', previewErr)
+            }
+          } else if (fileType.startsWith('image/')) {
+            try {
+              const img = await loadImage(buffer)
+              const maxDim = 120
+              let width = img.width
+              let height = img.height
+              if (width > height) {
+                if (width > maxDim) {
+                  height = Math.round((height * maxDim) / width)
+                  width = maxDim
+                }
+              } else {
+                if (height > maxDim) {
+                  width = Math.round((width * maxDim) / height)
+                  height = maxDim
+                }
+              }
+
+              const canvas = createCanvas(width, height)
+              const ctx = canvas.getContext('2d')
+              ctx.drawImage(img, 0, 0, width, height)
+              const previewBuffer = canvas.toBuffer('image/png')
+
+              await supa.storage
+                .from('documents')
+                .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
+                  contentType: 'image/png',
+                  upsert: true,
+                })
+              console.log(`Generated thumbnail preview for image ${finalDocId}`)
+            } catch (imgPreviewErr) {
+              console.error('Failed to generate image preview thumbnail:', imgPreviewErr)
+            }
+          } else {
+            // Generate beautiful preview card for Word, Excel, PPT, CSV, TXT
+            try {
+              await ensureFonts()
+              const previewBuffer = generateFilePreviewCard(fileName, fileType, ocrText)
+              await supa.storage
+                .from('documents')
+                .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
+                  contentType: 'image/png',
+                  upsert: true,
+                })
+              console.log(`Generated text/office preview card for document ${finalDocId}`)
+            } catch (textPreviewErr) {
+              console.error('Failed to generate text file preview card:', textPreviewErr)
+            }
+          }
+        })()
+
+        // Wait for both to complete
+        const [classification] = await Promise.all([
+          classificationPromise,
+          previewUploadPromise
+        ])
 
         let targetFolderId: string | null = null
 
@@ -429,69 +504,56 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Generate and upload preview concurrently/afterwards in the background
-        if (fileType === 'application/pdf' && summaryImageBase64) {
-          try {
-            const base64Data = summaryImageBase64.replace(/^data:image\/\w+;base64,/, '')
-            const previewBuffer = Buffer.from(base64Data, 'base64')
-            await supa.storage
-              .from('documents')
-              .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
-                contentType: 'image/jpeg',
-                upsert: true,
-              })
-            console.log(`Uploaded PDF preview for document ${finalDocId}`)
-          } catch (previewErr) {
-            console.error('Failed to upload PDF preview thumbnail:', previewErr)
+        // Determine final unique filename for generic image uploads
+        let finalFileName = fileName
+        const isImage = fileType.startsWith('image/')
+        if (isImage && isGenericFilename(fileName)) {
+          let descBase = ''
+          if (classification.document_title) {
+            descBase = classification.document_title
+          } else if (classification.final_category && classification.final_category !== 'Miscellaneous') {
+            descBase = classification.final_category
+          } else if (visualSummary) {
+            const cleanSummary = visualSummary.replace(/^this is a (photo of a|picture of a|selfie of a|billing invoice from|receipt for a)?\s*/i, '')
+            const firstWords = cleanSummary.split(/\s+/).slice(0, 3).join(' ')
+            descBase = firstWords || 'Photo'
+          } else {
+            descBase = 'Photo'
           }
-        } else if (fileType.startsWith('image/')) {
-          try {
-            const img = await loadImage(buffer)
-            const maxDim = 120
-            let width = img.width
-            let height = img.height
-            if (width > height) {
-              if (width > maxDim) {
-                height = Math.round((height * maxDim) / width)
-                width = maxDim
-              }
-            } else {
-              if (height > maxDim) {
-                width = Math.round((width * maxDim) / height)
-                height = maxDim
-              }
-            }
 
-            const canvas = createCanvas(width, height)
-            const ctx = canvas.getContext('2d')
-            ctx.drawImage(img, 0, 0, width, height)
-            const previewBuffer = canvas.toBuffer('image/png')
+          let cleanDesc = descBase
+            .replace(/[^a-zA-Z0-9\s-_]/g, '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
 
-            await supa.storage
-              .from('documents')
-              .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
-                contentType: 'image/png',
-                upsert: true,
-              })
-            console.log(`Generated thumbnail preview for image ${finalDocId}`)
-          } catch (imgPreviewErr) {
-            console.error('Failed to generate image preview thumbnail:', imgPreviewErr)
+          if (!cleanDesc.includes('image') && !cleanDesc.includes('photo')) {
+            cleanDesc = `${cleanDesc} image`
           }
-        } else {
-          // Generate beautiful preview card for Word, Excel, PPT, CSV, TXT
-          try {
-            await ensureFonts()
-            const previewBuffer = generateFilePreviewCard(fileName, fileType, ocrText)
-            await supa.storage
-              .from('documents')
-              .upload(`${userId}/previews/${finalDocId}.png`, previewBuffer, {
-                contentType: 'image/png',
-                upsert: true,
-              })
-            console.log(`Generated text/office preview card for document ${finalDocId}`)
-          } catch (textPreviewErr) {
-            console.error('Failed to generate text file preview card:', textPreviewErr)
+
+          const titleCaseName = cleanDesc
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ')
+
+          const lastDot = fileName.lastIndexOf('.')
+          const ext = lastDot !== -1 ? fileName.substring(lastDot) : '.png'
+
+          const { data: existingDocs } = await supa
+            .from('documents')
+            .select('file_name')
+            .eq('user_id', userId)
+
+          const docNames = new Set((existingDocs || []).map(d => d.file_name.toLowerCase()))
+
+          let candidateName = `${titleCaseName}${ext}`
+          let counter = 1
+          while (docNames.has(candidateName.toLowerCase())) {
+            candidateName = `${titleCaseName} (${counter})${ext}`
+            counter++
           }
+          finalFileName = candidateName
+          console.log(`Renamed generic image document from "${fileName}" to descriptive unique name "${finalFileName}"`)
         }
 
         // Serialize structured classification results as JSON in the description column
@@ -509,6 +571,7 @@ export async function POST(request: NextRequest) {
             description: sanitizePostgresString(finalDescription),
             folder_id: targetFolderId,
             partially_scanned: partiallyScanned,
+            file_name: finalFileName,
           })
           .eq('id', finalDocId)
 
@@ -540,4 +603,22 @@ export async function POST(request: NextRequest) {
     console.error('Upload route error:', err)
     return NextResponse.json({ error: err.message || 'An unexpected error occurred' }, { status: 500 })
   }
+}
+
+function isGenericFilename(name: string): boolean {
+  const lastDot = name.lastIndexOf('.')
+  const base = lastDot !== -1 ? name.substring(0, lastDot) : name
+  const baseLower = base.toLowerCase().trim()
+  return (
+    baseLower === 'image' ||
+    baseLower === 'photo' ||
+    baseLower === 'capture' ||
+    baseLower === 'scan' ||
+    baseLower === 'document' ||
+    baseLower === 'file' ||
+    baseLower === 'untitled' ||
+    /^image\s*\(\d+\)$/.test(baseLower) ||
+    /^image_/.test(baseLower) ||
+    /^camera_capture_/.test(baseLower)
+  )
 }

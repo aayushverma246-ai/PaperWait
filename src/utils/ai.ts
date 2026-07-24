@@ -156,7 +156,7 @@ export async function processPdfDocument(pdfBuffer: Buffer, maxPages = 99999): P
   if (firstPage && firstPage.page) {
     try {
       const page = firstPage.page
-      const viewport = page.getViewport({ scale: 3.0 })
+      const viewport = page.getViewport({ scale: 1.5 })
       const canvas = createCanvas(viewport.width, viewport.height)
       const context = canvas.getContext('2d')
       await page.render({
@@ -1473,48 +1473,89 @@ ${condensedOcrText}`
 
   try {
     console.log('Classify Document: Routing AI Pipeline Initiated...')
-    let fallbackResult: ClassificationResult | null = null
 
-    // 1. Query Fast Path (Llama 3.1 8B)
-    try {
-      console.log('Routing: Querying Llama 3.1 8B (Fast path)...')
-      const llamaRes = await promiseWithTimeout(makeCall(0, 'meta/llama-3.1-8b-instruct'), 8000, 'Llama-3.1-8B')
-      
-      // Normalize Llama's folder suggestion
-      llamaRes.suggested_folder = matchExistingFolder(llamaRes.suggested_folder, existingFolders, fileName)
+    // Start both requests in parallel
+    const llamaPromise = (async () => {
+      try {
+        console.log('Routing: Querying Llama 3.1 8B (Fast path)...')
+        const llamaRes = await promiseWithTimeout(makeCall(0, 'meta/llama-3.1-8b-instruct'), 8000, 'Llama-3.1-8B')
+        llamaRes.suggested_folder = matchExistingFolder(llamaRes.suggested_folder, existingFolders, fileName)
+        return llamaRes
+      } catch (llamaErr) {
+        console.warn('Routing: Llama 3.1 8B query failed or timed out:', llamaErr)
+        return null
+      }
+    })()
 
-      // If Llama returns high confidence (>= 0.90) AND is not a complex category, skip Nemotron to minimize latency and cost!
-      const isComplexCategory = ['Employment', 'Education', 'Identity Documents'].includes(llamaRes.final_category)
-      if (llamaRes.confidence_score >= 0.90 && !isComplexCategory) {
-        console.log(`Routing Success: Fast path (Llama 3.1 8B) returned high confidence: ${llamaRes.confidence_score}`)
-        return postProcessClassification(llamaRes, existingFolders, fileName, condensedOcrText)
+    const nemotronPromise = (async () => {
+      try {
+        console.log('Routing: Querying Nemotron-3-Nano-Omni (Deep reasoning path)...')
+        // Generous 28s timeout since Nemotron with reasoning budget can take time, keeping within Vercel's 30s function limit
+        const nemotronRes = await promiseWithTimeout(makeCall(256, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'), 28000, 'Nemotron-3-Nano-Omni')
+        nemotronRes.suggested_folder = matchExistingFolder(nemotronRes.suggested_folder, existingFolders, fileName)
+        return nemotronRes
+      } catch (nemotronErr) {
+        console.error('Routing: Nemotron Omni query failed or timed out:', nemotronErr)
+        return null
+      }
+    })()
+
+    let llamaResolved = false
+    let nemotronResolved = false
+    let llamaResult: ClassificationResult | null = null
+    let nemotronResult: ClassificationResult | null = null
+
+    const result = await new Promise<ClassificationResult>((resolve, reject) => {
+      let resolved = false
+
+      const handleLlama = (res: ClassificationResult | null) => {
+        if (resolved) return
+        llamaResult = res
+        llamaResolved = true
+        if (res) {
+          const isComplexCategory = ['Employment', 'Education', 'Identity Documents'].includes(res.final_category)
+          if (res.confidence_score >= 0.90 && !isComplexCategory) {
+            resolved = true
+            console.log(`Routing Success: Fast path (Llama 3.1 8B) resolved first with high confidence: ${res.confidence_score}`)
+            resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
+            return
+          }
+        }
+        checkDone()
       }
 
-      console.log(`Routing: Llama confidence is low (${llamaRes.confidence_score}), falling back to Nemotron Omni...`)
-      fallbackResult = llamaRes
-    } catch (llamaErr) {
-      console.warn('Routing: Llama 3.1 8B query failed or timed out, fallback to Nemotron:', llamaErr)
-    }
-
-    // 2. Query Deep Reasoning Path (Nemotron Omni)
-    try {
-      console.log('Routing: Querying Nemotron-3-Nano-Omni (Deep reasoning path)...')
-      // Generous 28s timeout since Nemotron with 1024 token budget can take 15-20s under NIM load, keeping within Vercel's 30s function limit
-      const nemotronRes = await promiseWithTimeout(makeCall(1024, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'), 28000, 'Nemotron-3-Nano-Omni')
-      
-      nemotronRes.suggested_folder = matchExistingFolder(nemotronRes.suggested_folder, existingFolders, fileName)
-      console.log(`Routing Success: Deep reasoning path (Nemotron Omni) completed with confidence: ${nemotronRes.confidence_score}`)
-      
-      return postProcessClassification(nemotronRes, existingFolders, fileName, condensedOcrText)
-    } catch (nemotronErr) {
-      console.error('Routing: Nemotron Omni query failed or timed out:', nemotronErr)
-      
-      if (fallbackResult) {
-        console.log('Routing: Using fallback Llama 3.1 8B classification result.')
-        return postProcessClassification(fallbackResult, existingFolders, fileName, condensedOcrText)
+      const handleNemotron = (res: ClassificationResult | null) => {
+        if (resolved) return
+        nemotronResult = res
+        nemotronResolved = true
+        if (res) {
+          resolved = true
+          console.log(`Routing Success: Deep reasoning path (Nemotron Omni) resolved first with confidence: ${res.confidence_score}`)
+          resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
+          return
+        }
+        checkDone()
       }
-      throw nemotronErr
-    }
+
+      const checkDone = () => {
+        if (resolved) return
+        if (llamaResolved && nemotronResolved) {
+          resolved = true
+          if (nemotronResult) {
+            resolve(postProcessClassification(nemotronResult, existingFolders, fileName, condensedOcrText))
+          } else if (llamaResult) {
+            console.log('Routing: Using fallback Llama 3.1 8B classification result.')
+            resolve(postProcessClassification(llamaResult, existingFolders, fileName, condensedOcrText))
+          } else {
+            reject(new Error('Both Llama and Nemotron routing classification paths failed.'))
+          }
+        }
+      }
+
+      llamaPromise.then(handleLlama)
+      nemotronPromise.then(handleNemotron)
+    })
+    return result
   } catch (err) {
     console.error('All routing classification paths failed, returning default fallback.', err)
     const defaultFallback = {
@@ -1598,7 +1639,7 @@ Do not include any conversational intro, meta commentary, or formatting.`
   } catch (err) {
     console.error('Llama 3.1 8B summary call failed, falling back to Nvidia Nemotron (budget 512)...', err)
     try {
-      return await makeCall(512, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning')
+      return await makeCall(128, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning')
     } catch (retryErr) {
       console.error('Nvidia Nemotron summary fallback failed, falling back to DeepSeek V4 Flash...', retryErr)
       try {
