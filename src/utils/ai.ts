@@ -1208,19 +1208,17 @@ export function postProcessClassification(
   }
 
   // Custom overrides for specific subtypes to prevent misrouting
-  if (finalCategory === 'Employment') {
-    if (isResumeFile) {
-      defaultFolder = 'Resume'
-    } else {
-      // Allow creating a new folder for the candidate's name (e.g. Swati Burman, Aayush) for BGC forms, cover letters, contracts
-      defaultFolder = getDynamicFolder('Miscellaneous', true)
-    }
+  if (isResumeFile) {
+    defaultFolder = 'Resume'
+    finalCategory = 'Employment'
+  } else if (isMarksheetFile) {
+    defaultFolder = 'Marksheets'
+    finalCategory = 'Education'
+  } else if (finalCategory === 'Employment') {
+    // Allow creating a new folder for the candidate's name (e.g. Swati Burman, Aayush) for BGC forms, cover letters, contracts
+    defaultFolder = getDynamicFolder('Miscellaneous', true)
   } else if (finalCategory === 'Education') {
-    if (isMarksheetFile) {
-      defaultFolder = 'Marksheets'
-    } else {
-      defaultFolder = getDynamicFolder('Education', true)
-    }
+    defaultFolder = getDynamicFolder('Education', true)
   } else if (finalCategory === 'Identity Documents') {
     defaultFolder = getDynamicFolder('Government IDs', false)
   }
