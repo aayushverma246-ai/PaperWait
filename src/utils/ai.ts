@@ -1491,7 +1491,7 @@ ${condensedOcrText}`
       try {
         console.log('Routing: Querying Nemotron-3-Nano-Omni (Deep reasoning path)...')
         // Generous 28s timeout since Nemotron with reasoning budget can take time, keeping within Vercel's 30s function limit
-        const nemotronRes = await promiseWithTimeout(makeCall(256, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'), 28000, 'Nemotron-3-Nano-Omni')
+        const nemotronRes = await promiseWithTimeout(makeCall(1024, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'), 28000, 'Nemotron-3-Nano-Omni')
         nemotronRes.suggested_folder = matchExistingFolder(nemotronRes.suggested_folder, existingFolders, fileName)
         return nemotronRes
       } catch (nemotronErr) {
@@ -1513,8 +1513,8 @@ ${condensedOcrText}`
         llamaResult = res
         llamaResolved = true
         if (res) {
-          const isComplexCategory = ['Employment', 'Education', 'Identity Documents'].includes(res.final_category)
-          if (res.confidence_score >= 0.90 && !isComplexCategory) {
+          const isSimpleFinancial = ['Receipts', 'Invoices', 'Bills', 'Utilities', 'Bank Documents'].includes(res.final_category)
+          if (res.confidence_score >= 0.90 && isSimpleFinancial) {
             resolved = true
             console.log(`Routing Success: Fast path (Llama 3.1 8B) resolved first with high confidence: ${res.confidence_score}`)
             resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
@@ -1639,7 +1639,7 @@ Do not include any conversational intro, meta commentary, or formatting.`
   } catch (err) {
     console.error('Llama 3.1 8B summary call failed, falling back to Nvidia Nemotron (budget 512)...', err)
     try {
-      return await makeCall(128, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning')
+      return await makeCall(512, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning')
     } catch (retryErr) {
       console.error('Nvidia Nemotron summary fallback failed, falling back to DeepSeek V4 Flash...', retryErr)
       try {
