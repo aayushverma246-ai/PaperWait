@@ -319,23 +319,25 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Fetch folders
-      const { data: foldersData, error: foldersErr } = await supabase
-        .from('folders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('name', { ascending: true })
+      // Fetch folders and documents in parallel
+      const [foldersResult, docsResult] = await Promise.all([
+        supabase
+          .from('folders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('name', { ascending: true }),
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+      ])
 
-      if (foldersErr) throw foldersErr
+      if (foldersResult.error) throw foldersResult.error
+      if (docsResult.error) throw docsResult.error
 
-      // Fetch documents
-      const { data: docsData, error: docsErr } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (docsErr) throw docsErr
+      const foldersData = foldersResult.data
+      const docsData = docsResult.data
 
       // Batch create signed URLs for image preview thumbnails
       let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
@@ -363,40 +365,37 @@ export default function DashboardPage() {
         }
       }
 
-      // Preload all thumbnail images to prevent blank squares
-      if (docsWithUrls && docsWithUrls.length > 0) {
-        try {
-          const preloadPromises = docsWithUrls.map(d => {
-            const hasThumbnail = !!d.signedUrl
-            if (!hasThumbnail) return Promise.resolve()
-            
-            return new Promise<void>((resolve) => {
-              const img = new Image()
-              img.src = d.signedUrl!
-              const timer = setTimeout(() => {
-                resolve()
-              }, 2000)
-              img.onload = () => {
-                clearTimeout(timer)
-                resolve()
-              }
-              img.onerror = () => {
-                clearTimeout(timer)
-                d.thumbnailError = true
-                resolve()
-              }
-            })
-          })
-          await Promise.all(preloadPromises)
-        } catch (preloadErr) {
-          console.warn('Thumbnail preloading failed:', preloadErr)
-        }
-      }
-
       setFolders(foldersData || [])
       setDocuments(docsWithUrls)
       setSelectedIds(new Set())
       setSelectedFolderIds(new Set())
+
+      // Trigger thumbnail preloading asynchronously in the background so it doesn't block page rendering
+      if (docsWithUrls && docsWithUrls.length > 0) {
+        const preloadPromises = docsWithUrls.map(d => {
+          const hasThumbnail = !!d.signedUrl
+          if (!hasThumbnail) return Promise.resolve()
+          
+          return new Promise<void>((resolve) => {
+            const img = new Image()
+            img.src = d.signedUrl!
+            const timer = setTimeout(() => {
+              resolve()
+            }, 2000)
+            img.onload = () => {
+              clearTimeout(timer)
+              resolve()
+            }
+            img.onerror = () => {
+              clearTimeout(timer)
+              setDocuments(prev => prev.map(doc => doc.id === d.id ? { ...doc, thumbnailError: true } : doc))
+              resolve()
+            }
+          })
+        })
+        Promise.all(preloadPromises).catch(err => console.warn('Background preload failed:', err))
+      }
+
     } catch (err) {
       console.error('Error loading dashboard data:', err)
     } finally {
@@ -497,7 +496,49 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return null
+    return (
+      <div className="space-y-10 animate-pulse">
+        {/* Title & Actions bar skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="space-y-2">
+            <div className="h-9 w-48 bg-zinc-800/80 rounded-xl"></div>
+            <div className="h-4 w-80 bg-zinc-900/80 rounded-lg"></div>
+          </div>
+          <div className="h-11 w-32 bg-zinc-800/80 rounded-xl"></div>
+        </div>
+
+        {/* Search Input Bar skeleton */}
+        <div className="h-12 w-full bg-zinc-900/20 border border-zinc-800/50 rounded-2xl"></div>
+
+        {/* Grid of Folders skeleton */}
+        <div>
+          <div className="h-5 w-28 bg-zinc-800/80 rounded mb-4"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-32 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <div className="h-12 w-12 bg-zinc-800/80 rounded-xl"></div>
+                  <div className="h-5 w-16 bg-zinc-800/80 rounded-full"></div>
+                </div>
+                <div className="h-4 w-24 bg-zinc-800/80 rounded mt-4"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Upload and Documents section skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 flex flex-col space-y-4">
+            <div className="h-5 w-40 bg-zinc-800/80 rounded"></div>
+            <div className="h-64 bg-zinc-900/20 border border-zinc-800/80 rounded-2xl"></div>
+          </div>
+          <div className="flex flex-col space-y-4">
+            <div className="h-5 w-40 bg-zinc-800/80 rounded"></div>
+            <div className="h-64 bg-zinc-900/20 border border-zinc-800/80 rounded-2xl"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

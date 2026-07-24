@@ -160,41 +160,46 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Load folder details (if not uncategorized)
-      if (!isUncategorized) {
-        const { data: folderData, error: folderErr } = await supabase
-          .from('folders')
-          .select('*')
-          .eq('id', id)
+      // Parallelize folder details query and documents query
+      const folderPromise = !isUncategorized
+        ? supabase
+            .from('folders')
+            .select('*')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single()
+        : Promise.resolve({ data: { id: 'uncategorized', name: 'Uncategorized', created_at: '' }, error: null })
+
+      const docsPromise = (() => {
+        const query = supabase
+          .from('documents')
+          .select('id, file_name, file_type, storage_path, status, partially_scanned, created_at, ocr_text, description')
           .eq('user_id', user.id)
-          .single()
+          .order('created_at', { ascending: false })
 
-        if (folderErr) throw folderErr
-        setFolder(folderData)
+        if (isUncategorized) {
+          query.is('folder_id', null)
+        } else {
+          query.eq('folder_id', id)
+        }
+        return query
+      })()
+
+      const [folderResult, docsResult] = await Promise.all([
+        folderPromise,
+        docsPromise
+      ])
+
+      if (folderResult.error) throw folderResult.error
+      if (docsResult.error) throw docsResult.error
+
+      const folderData = folderResult.data
+      const docsData = docsResult.data
+
+      setFolder(folderData)
+      if (!isUncategorized && folderData) {
         setRenameValue(folderData.name)
-      } else {
-        setFolder({
-          id: 'uncategorized',
-          name: 'Uncategorized',
-          created_at: '',
-        })
       }
-
-      // Load documents
-      const query = supabase
-        .from('documents')
-        .select('id, file_name, file_type, storage_path, status, partially_scanned, created_at, ocr_text, description')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (isUncategorized) {
-        query.is('folder_id', null)
-      } else {
-        query.eq('folder_id', id)
-      }
-
-      const { data: docsData, error: docsErr } = await query
-      if (docsErr) throw docsErr
 
       // Batch create signed URLs for image preview thumbnails
       let docsWithUrls: DBDocument[] = (docsData || []).map((doc: any) => ({ ...doc, signedUrl: null }))
@@ -222,38 +227,35 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
         }
       }
 
-      // Preload all thumbnail images to prevent blank squares
-      if (docsWithUrls && docsWithUrls.length > 0) {
-        try {
-          const preloadPromises = docsWithUrls.map(d => {
-            const hasThumbnail = !!d.signedUrl
-            if (!hasThumbnail) return Promise.resolve()
-            
-            return new Promise<void>((resolve) => {
-              const img = new Image()
-              img.src = d.signedUrl!
-              const timer = setTimeout(() => {
-                resolve()
-              }, 2000)
-              img.onload = () => {
-                clearTimeout(timer)
-                resolve()
-              }
-              img.onerror = () => {
-                clearTimeout(timer)
-                d.thumbnailError = true
-                resolve()
-              }
-            })
-          })
-          await Promise.all(preloadPromises)
-        } catch (preloadErr) {
-          console.warn('Thumbnail preloading failed:', preloadErr)
-        }
-      }
-
       setDocuments(docsWithUrls)
       setSelectedIds(new Set())
+
+      // Trigger thumbnail preloading asynchronously in the background so it doesn't block page rendering
+      if (docsWithUrls && docsWithUrls.length > 0) {
+        const preloadPromises = docsWithUrls.map(d => {
+          const hasThumbnail = !!d.signedUrl
+          if (!hasThumbnail) return Promise.resolve()
+          
+          return new Promise<void>((resolve) => {
+            const img = new Image()
+            img.src = d.signedUrl!
+            const timer = setTimeout(() => {
+              resolve()
+            }, 2000)
+            img.onload = () => {
+              clearTimeout(timer)
+              resolve()
+            }
+            img.onerror = () => {
+              clearTimeout(timer)
+              setDocuments(prev => prev.map(doc => doc.id === d.id ? { ...doc, thumbnailError: true } : doc))
+              resolve()
+            }
+          })
+        })
+        Promise.all(preloadPromises).catch(err => console.warn('Background preload failed:', err))
+      }
+
     } catch (err) {
       console.error('Error loading folder page:', err)
       router.push('/dashboard')
@@ -395,7 +397,46 @@ export default function FolderPage({ params }: { params: Promise<{ id: string }>
   }
 
   if (loading) {
-    return null
+    return (
+      <div className="space-y-8 animate-pulse">
+        {/* Back button & header bar skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/60 pb-6">
+          <div className="flex items-center space-x-4 min-w-0">
+            <div className="p-2 h-9 w-9 bg-zinc-850 rounded-xl flex-shrink-0"></div>
+            <div className="space-y-2">
+              <div className="h-3 w-16 bg-zinc-855 rounded"></div>
+              <div className="h-8 w-48 bg-zinc-800/80 rounded-lg mt-1"></div>
+            </div>
+          </div>
+          <div className="h-9 w-28 bg-zinc-800/80 rounded-xl"></div>
+        </div>
+
+        {/* Search Input Bar skeleton */}
+        <div className="h-12 w-full bg-zinc-900/20 border border-zinc-800/50 rounded-2xl"></div>
+
+        {/* List of Documents skeleton */}
+        <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden">
+          <div className="p-5 border-b border-zinc-850 flex justify-between items-center">
+            <div className="h-5 w-48 bg-zinc-800/80 rounded"></div>
+            <div className="h-5 w-16 bg-zinc-800/80 rounded-full"></div>
+          </div>
+          <div className="p-5 space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex justify-between items-center py-2">
+                <div className="flex items-center space-x-4">
+                  <div className="h-10 w-10 bg-zinc-800/85 rounded-lg"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-48 bg-zinc-800/85 rounded"></div>
+                    <div className="h-3 w-32 bg-zinc-855 rounded"></div>
+                  </div>
+                </div>
+                <div className="h-4 w-12 bg-zinc-800/85 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

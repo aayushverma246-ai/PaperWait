@@ -215,47 +215,49 @@ export default function DocumentPage({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Load document
-      const { data: docData, error: docErr } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single()
+      // Step 1: Fetch document details and all folders in parallel
+      const [docResult, foldersResult] = await Promise.all([
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('folders')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .order('name', { ascending: true })
+      ])
 
-      if (docErr) throw docErr
+      if (docResult.error) throw docResult.error
+      if (foldersResult.error) throw foldersResult.error
+
+      const docData = docResult.data
       setDocument(docData)
+      setFolders(foldersResult.data || [])
 
-      // Load all folders
-      const { data: foldersData, error: foldersErr } = await supabase
-        .from('folders')
-        .select('id, name')
-        .eq('user_id', user.id)
-        .order('name', { ascending: true })
-
-      if (foldersErr) throw foldersErr
-      setFolders(foldersData || [])
-
-      // Generate signed URL for original file (download/open original)
-      const { data: urlData, error: urlErr } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(docData.storage_path, 3600) // 1 hour expiry
-
-      if (urlErr) throw urlErr
-      setSignedUrl(urlData.signedUrl)
-
-      // Generate signed URL for preview image/document
       const isPdf = docData.file_type === 'application/pdf'
       const isImg = docData.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(docData.file_name)
       
-      // For images, we load the raw file itself. For PDF and non-media documents, we fetch the visual preview PNG.
       const displayPreviewPath = isImg
         ? docData.storage_path
         : `${user.id}/previews/${docData.id}.png`
 
-      const { data: previewUrlData } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(displayPreviewPath, 3600)
+      // Step 2: Generate original signed URL and preview signed URL in parallel
+      const [urlResult, previewUrlResult] = await Promise.all([
+        supabase.storage
+          .from('documents')
+          .createSignedUrl(docData.storage_path, 3600), // 1 hour expiry
+        supabase.storage
+          .from('documents')
+          .createSignedUrl(displayPreviewPath, 3600)
+      ])
+
+      if (urlResult.error) throw urlResult.error
+      setSignedUrl(urlResult.data.signedUrl)
+
+      const previewUrlData = previewUrlResult.data
 
       if (previewUrlData?.signedUrl) {
         if (!isImg) {
@@ -390,7 +392,55 @@ export default function DocumentPage({
   }
 
   if (loading) {
-    return null
+    return (
+      <div className="space-y-8 animate-pulse">
+        {/* Back button & title header skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="p-2 h-9 w-9 bg-zinc-850 rounded-xl flex-shrink-0"></div>
+            <div className="space-y-2">
+              <div className="h-3 w-24 bg-zinc-855 rounded"></div>
+              <div className="h-8 w-64 bg-zinc-800/80 rounded-lg mt-1"></div>
+            </div>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <div className="h-9 w-32 bg-zinc-800/80 rounded-xl"></div>
+            <div className="h-9 w-24 bg-zinc-800/80 rounded-xl"></div>
+            <div className="h-9 w-36 bg-zinc-800/80 rounded-xl"></div>
+          </div>
+        </div>
+
+        {/* Main split display skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Preview Column */}
+          <div className="bg-zinc-900 border border-zinc-850 rounded-2xl h-[550px] flex flex-col">
+            <div className="p-4 border-b border-zinc-850 bg-zinc-950/60 flex justify-between items-center">
+              <div className="h-8 w-44 bg-zinc-800/80 rounded-lg"></div>
+              <div className="h-6 w-20 bg-zinc-800/80 rounded"></div>
+            </div>
+            <div className="flex-1 bg-zinc-950 flex items-center justify-center p-4">
+              <div className="h-full w-full bg-zinc-900/30 rounded-lg border border-zinc-850"></div>
+            </div>
+          </div>
+
+          {/* Right Metadata Column */}
+          <div className="space-y-8">
+            {/* Folder Move Widget */}
+            <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-6">
+              <div className="h-5 w-32 bg-zinc-800/80 rounded mb-4"></div>
+              <div className="h-10 w-full bg-zinc-800/80 rounded-xl"></div>
+            </div>
+
+            {/* AI Summary Card */}
+            <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-6">
+              <div className="h-5 w-32 bg-zinc-800/80 rounded mb-4"></div>
+              <div className="h-4 w-full bg-zinc-800/80 rounded mb-2"></div>
+              <div className="h-4 w-5/6 bg-zinc-800/80 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!document) return null
