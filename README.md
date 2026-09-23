@@ -14,6 +14,8 @@
 
 ### 🌐 [paperwait.me](https://paperwait.me)
 
+### 🎥 [Watch Product Demo](https://drive.google.com/file/d/1K95xMwCEcmCGVs2hF9aCWnMDlrArQdOy/view?usp=sharing)
+
 [Key Features](#-key-features) • [System Architecture](#-system-architecture) • [Getting Started](#-getting-started) • [Database Setup](#-database--storage-setup) • [Security Spec](#-security-specifications)
 
 </div>
