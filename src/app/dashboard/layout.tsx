@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { FileText, LogOut, Loader2, AlertTriangle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { UploadProvider, useUpload } from './UploadContext'
+import DocumentChat from '@/components/DocumentChat'
 
 export default function DashboardLayout({
   children,
@@ -217,6 +218,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
+
+      {/* AI Document Chatbot */}
+      <DocumentChat />
     </div>
   )
 }
