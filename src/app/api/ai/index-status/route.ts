@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       total,
       indexed,
+      unindexed: Math.max(0, total - indexed),
       pending: Math.max(0, pending),
       failed: failedDocs || 0,
       indexing: indexingDocs || 0,

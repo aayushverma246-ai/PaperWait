@@ -159,7 +159,7 @@ export async function indexDocument(
 export async function indexDocumentsBatch(
   documentIds: string[],
   userId: string,
-  maxBatch: number = 5
+  maxBatch: number = 2
 ): Promise<IndexResult[]> {
   const results: IndexResult[] = []
   const batch = documentIds.slice(0, maxBatch)
@@ -168,9 +168,9 @@ export async function indexDocumentsBatch(
     const result = await indexDocument(docId, userId)
     results.push(result)
 
-    // Brief pause between documents to be kind to rate limits
+    // Brief pause between documents
     if (results.length < batch.length) {
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 200))
     }
   }
 
@@ -201,13 +201,18 @@ export async function findUnindexedDocuments(
   if (docsError || !allDocs) return []
 
   // Get all indexed document IDs
+  // If a document was stuck in 'indexing' for > 2 minutes, treat it as eligible for re-indexing
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
   const { data: indexedDocs } = await supa
     .from('document_index_status')
-    .select('document_id, status')
+    .select('document_id, status, updated_at')
     .eq('user_id', userId)
-    .in('status', ['indexed', 'indexing'])
 
-  const indexedSet = new Set((indexedDocs || []).map(d => d.document_id))
+  const indexedSet = new Set(
+    (indexedDocs || [])
+      .filter(d => d.status === 'indexed' || (d.status === 'indexing' && d.updated_at && d.updated_at > twoMinutesAgo))
+      .map(d => d.document_id)
+  )
 
   // Return documents not yet indexed
   const unindexed = allDocs

@@ -52,19 +52,57 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Search for similar chunks using the database function
-    const { data: matches, error: searchError } = await supabase.rpc(
-      'match_document_chunks',
-      {
-        query_embedding: `[${queryEmbedding.join(',')}]`,
-        match_user_id: user.id,
-        match_threshold: 0.25,
-        match_count: clampedLimit * 2, // Fetch extra for deduplication
-      }
-    )
+    let matches: any[] = []
+    try {
+      const { data: rpcMatches, error: searchError } = await supabase.rpc(
+        'match_document_chunks',
+        {
+          query_embedding: `[${queryEmbedding.join(',')}]`,
+          match_user_id: user.id,
+          match_threshold: 0.15,
+          match_count: clampedLimit * 2, // Fetch extra for deduplication
+        }
+      )
 
-    if (searchError) {
-      console.error('Vector search error:', searchError)
-      return NextResponse.json({ error: 'Search failed' }, { status: 500 })
+      if (searchError) {
+        console.error('Vector search error:', searchError)
+      } else if (rpcMatches) {
+        matches = rpcMatches
+      }
+    } catch (err) {
+      console.error('Vector search exception:', err)
+    }
+
+    // 3. Keyword fallback if vector matches are few or if user queried a direct keyword
+    const matchedDocIds = new Set(matches.map(m => m.document_id))
+    try {
+      const queryTerm = query.trim()
+      const { data: fallbackDocs } = await supabase
+        .from('documents')
+        .select('id, file_name, file_type, description, ocr_text, created_at')
+        .eq('user_id', user.id)
+        .eq('status', 'done')
+        .ilike('file_name', `%${queryTerm}%`)
+        .limit(clampedLimit)
+
+      if (fallbackDocs && fallbackDocs.length > 0) {
+        for (const fbDoc of fallbackDocs) {
+          if (!matchedDocIds.has(fbDoc.id)) {
+            matchedDocIds.add(fbDoc.id)
+            matches.unshift({
+              id: fbDoc.id,
+              document_id: fbDoc.id,
+              chunk_index: 0,
+              chunk_text: fbDoc.ocr_text ? fbDoc.ocr_text.substring(0, 300) : fbDoc.file_name,
+              page_number: 1,
+              source_metadata: { fileName: fbDoc.file_name, documentId: fbDoc.id },
+              similarity: 0.95, // Direct title match
+            })
+          }
+        }
+      }
+    } catch (fbErr) {
+      console.error('Fallback search error:', fbErr)
     }
 
     if (!matches || matches.length === 0) {

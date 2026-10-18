@@ -6,6 +6,7 @@ import { createCanvas, loadImage } from '@napi-rs/canvas'
 import mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
 import * as officeParser from 'officeparser'
+import { indexDocument } from '@/utils/semantic/indexer'
 
 export const maxDuration = 60
 
@@ -581,6 +582,14 @@ export async function POST(request: NextRequest) {
 
         console.log(`Document ${finalDocId} status set to done in database.`)
         console.log(`Document ${finalDocId} classification complete and saved.`)
+
+        // Automatically index document for semantic search & AI chatbot
+        try {
+          await indexDocument(finalDocId, userId)
+          console.log(`Document ${finalDocId} automatically indexed for semantic search.`)
+        } catch (indexErr) {
+          console.error(`Automatic indexing for document ${finalDocId} failed:`, indexErr)
+        }
 
       } catch (processError: any) {
         console.error('Document background processing failed:', processError)

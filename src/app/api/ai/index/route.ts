@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
       if (!Array.isArray(documentIds)) {
         return NextResponse.json({ error: 'documentIds must be an array' }, { status: 400 })
       }
-      // Limit to 5 documents per request
-      documentIds = documentIds.slice(0, 5)
+      // Limit to 2 documents per request to safely stay well within Vercel timeout limits
+      documentIds = documentIds.slice(0, 2)
     } else {
       // Auto-detect unindexed documents for backfill
-      documentIds = await findUnindexedDocuments(user.id, 5)
+      documentIds = await findUnindexedDocuments(user.id, 2)
     }
 
     if (documentIds.length === 0) {
@@ -51,15 +51,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Index the batch
-    const results = await indexDocumentsBatch(documentIds, user.id, 5)
+    const results = await indexDocumentsBatch(documentIds, user.id, 2)
 
     // Check if there are more unindexed documents
-    const remaining = await findUnindexedDocuments(user.id, 1)
+    const remainingDocs = await findUnindexedDocuments(user.id, 50)
 
     return NextResponse.json({
       message: `Indexed ${results.filter(r => r.status === 'indexed').length} documents`,
       results,
-      remaining: remaining.length,
+      remaining: remainingDocs.length,
     })
   } catch (error: any) {
     console.error('Indexing error:', error)

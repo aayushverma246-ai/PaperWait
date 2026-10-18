@@ -77,6 +77,12 @@ export default function DocumentChat() {
     }
   }, [isOpen, fetchIndexStatus])
 
+  useEffect(() => {
+    if (isOpen && indexStatus && !indexStatus.isFullyIndexed && indexStatus.total > 0 && !indexing) {
+      handleIndexDocuments()
+    }
+  }, [isOpen, indexStatus?.isFullyIndexed, indexing])
+
   const handleIndexDocuments = async () => {
     setIndexing(true)
     try {
@@ -226,7 +232,7 @@ export default function DocumentChat() {
               <div className="flex items-center space-x-2 min-w-0">
                 <Database className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                 <span className="text-[10px] text-amber-400 font-semibold truncate">
-                  {indexStatus.indexed}/{indexStatus.total} docs indexed
+                  {indexing ? 'Auto-indexing documents...' : `${indexStatus.indexed}/${indexStatus.total} docs indexed`}
                 </span>
               </div>
               <button
@@ -239,7 +245,7 @@ export default function DocumentChat() {
                 ) : (
                   <RefreshCw className="w-3 h-3" />
                 )}
-                <span>{indexing ? 'Indexing...' : 'Index Now'}</span>
+                <span>{indexing ? 'Syncing...' : 'Sync Index'}</span>
               </button>
             </div>
           )}

@@ -17,7 +17,8 @@ import {
   X,
   Camera,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Sparkles
 } from 'lucide-react'
 import ConfirmModal from '@/components/ConfirmModal'
 import SearchInput from '@/components/SearchInput'
@@ -122,6 +123,35 @@ export default function DashboardPage() {
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Automatic background indexing sync
+  useEffect(() => {
+    let active = true
+    async function syncIndex() {
+      try {
+        const res = await fetch('/api/ai/index-status')
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.unindexed > 0 && active) {
+          const indexRes = await fetch('/api/ai/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          })
+          if (indexRes.ok) {
+            const indexData = await indexRes.json()
+            if (indexData.remaining > 0 && active) {
+              setTimeout(syncIndex, 1000)
+            }
+          }
+        }
+      } catch (e) {
+        // Silent background sync
+      }
+    }
+    syncIndex()
+    return () => { active = false }
+  }, [])
 
   const startCamera = async () => {
     setIsCameraActive(true)
@@ -565,25 +595,50 @@ export default function DashboardPage() {
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder={isSemanticSearch ? "Ask a question about your documents..." : "Search all documents by name or content..."}
+          onSubmit={() => {
+            // Instant trigger on Enter key
+          }}
+          placeholder={isSemanticSearch ? "Ask AI or describe what you're looking for (press Enter to search)..." : "Search all documents by name or content..."}
           className="flex-1"
         />
         <button
           onClick={() => setIsSemanticSearch(!isSemanticSearch)}
           className={`flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ease-out cursor-pointer flex-shrink-0 border ${
             isSemanticSearch
-              ? 'bg-gradient-to-r from-violet-600/20 to-indigo-600/20 border-violet-500/40 text-violet-300 hover:border-violet-500/60'
+              ? 'bg-gradient-to-r from-violet-600/25 to-indigo-600/25 border-violet-500/50 text-violet-300 hover:border-violet-400'
               : 'bg-zinc-900/30 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
           }`}
           title={isSemanticSearch ? 'Switch to keyword search' : 'Switch to AI semantic search'}
         >
-          {isSemanticSearch ? (
-            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg><span className="hidden sm:inline">AI Search</span></>
-          ) : (
-            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg><span className="hidden sm:inline">AI Search</span></>
-          )}
+          <Sparkles className={`w-4 h-4 ${isSemanticSearch ? 'text-violet-400' : 'text-zinc-400'}`} />
+          <span className="hidden sm:inline">{isSemanticSearch ? 'AI Search Active' : 'AI Search'}</span>
         </button>
       </div>
+
+      {isSemanticSearch && !searchQuery ? (
+        /* AI Search helper card when search box is empty */
+        <div className="p-5 bg-gradient-to-r from-violet-950/20 via-indigo-950/15 to-zinc-900/20 border border-violet-900/30 rounded-2xl animate-fade-in">
+          <div className="flex items-center space-x-3 mb-2">
+            <Sparkles className="w-4 h-4 text-violet-400" />
+            <h3 className="text-sm font-semibold text-zinc-200">AI Semantic Search is Active</h3>
+          </div>
+          <p className="text-xs text-zinc-400 mb-3 max-w-xl">
+            Search by meaning, questions, or concepts instead of exact keywords. All uploaded documents are automatically analyzed and indexed.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-zinc-500 font-medium">Try searching:</span>
+            {['Show my resume and internship experience', 'Find GATE exam application', 'Hotel booking receipts', 'Lecture notes on SOLID principles'].map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => setSearchQuery(suggestion)}
+                className="text-xs px-2.5 py-1 rounded-lg bg-zinc-900/80 border border-zinc-800 text-zinc-300 hover:text-white hover:border-violet-500/50 hover:bg-violet-950/30 transition-all cursor-pointer"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {searchQuery && isSemanticSearch ? (
         /* Semantic Search Results Mode */
@@ -591,6 +646,7 @@ export default function DashboardPage() {
           isActive={isSemanticSearch}
           query={searchQuery}
           onToggle={() => setIsSemanticSearch(!isSemanticSearch)}
+          onSelectQuery={(q) => setSearchQuery(q)}
         />
       ) : searchQuery ? (
         /* Search Results Mode */

@@ -8,13 +8,17 @@ interface SearchInputProps {
   onChange: (val: string) => void
   placeholder?: string
   className?: string
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  onSubmit?: () => void
 }
 
 export default function SearchInput({
   value,
   onChange,
   placeholder = "Search...",
-  className = ""
+  className = "",
+  onKeyDown,
+  onSubmit,
 }: SearchInputProps) {
   return (
     <div className={`relative w-full ${className}`}>
@@ -25,6 +29,13 @@ export default function SearchInput({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && onSubmit) {
+            e.preventDefault()
+            onSubmit()
+          }
+          if (onKeyDown) onKeyDown(e)
+        }}
         placeholder={placeholder}
         className="block w-full pl-11 pr-10 py-2.5 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl transition-all"
       />
