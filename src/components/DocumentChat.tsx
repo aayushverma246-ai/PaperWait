@@ -195,7 +195,7 @@ export default function DocumentChat() {
 
       {/* Chat Panel */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(600px,calc(100vh-8rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-scale-up">
+        <div className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(480px,calc(100vw-2rem))] h-[min(640px,calc(100vh-7rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden animate-scale-up">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center space-x-2.5">
@@ -288,17 +288,17 @@ export default function DocumentChat() {
               /* Message bubbles */
               messages.map((msg, idx) => (
                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+                  <div className={`${msg.role === 'user' ? 'max-w-[85%] order-2' : 'max-w-[96%] order-1'}`}>
                     {/* Message bubble */}
-                    <div className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
+                    <div className={`px-4 py-3 rounded-2xl text-[13px] leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-md'
+                        ? 'bg-indigo-600 text-white rounded-br-md shadow-sm'
                         : msg.error
                           ? 'bg-red-950/30 border border-red-900/30 text-red-300 rounded-bl-md'
-                          : 'bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-bl-md'
+                          : 'bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-bl-md shadow-sm'
                     }`}>
                       {msg.role === 'assistant' ? (
-                        <div className="prose prose-invert prose-xs max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
+                        <div className="text-[13px] leading-relaxed text-zinc-200">
                           {formatMarkdown(msg.content)}
                         </div>
                       ) : (
@@ -392,56 +392,217 @@ export default function DocumentChat() {
 }
 
 /**
- * Simple markdown-to-JSX formatter for assistant messages.
- * Handles bold, code, and line breaks without importing a full markdown library.
+ * Elegant markdown-to-JSX formatter for assistant messages.
+ * Beautifully formats tables, headings, lists, blockquotes, code blocks,
+ * and inline elements (bold, italic, code, document citations).
  */
 function formatMarkdown(text: string): React.ReactNode {
   const lines = text.split('\n')
   const elements: React.ReactNode[] = []
+  let i = 0
 
-  for (let i = 0; i < lines.length; i++) {
+  while (i < lines.length) {
     const line = lines[i]
+    const trimmed = line.trim()
 
-    if (!line.trim()) {
-      elements.push(<br key={`br-${i}`} />)
+    // 1. Skip completely empty lines
+    if (!trimmed) {
+      elements.push(<div key={`space-${i}`} className="h-1.5" />)
+      i++
       continue
     }
 
-    // Process inline formatting
-    const processed = processInline(line)
+    // 2. Markdown Table Detection
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.includes('|')) {
+      const tableLines: string[] = []
+      let j = i
+      while (j < lines.length && lines[j].trim().startsWith('|') && lines[j].trim().endsWith('|')) {
+        tableLines.push(lines[j].trim())
+        j++
+      }
 
-    // Check for bullet points
-    if (line.trim().startsWith('- ') || line.trim().startsWith('• ') || line.trim().match(/^\d+\.\s/)) {
+      if (tableLines.length >= 2) {
+        // Table found!
+        const parseRow = (rowStr: string) => {
+          const inner = rowStr.replace(/^\|/, '').replace(/\|$/, '')
+          return inner.split('|').map(c => c.trim())
+        }
+
+        const headers = parseRow(tableLines[0])
+        const separator = tableLines[1]
+        const isSep = /^\|[\s\-:|]+\|$/.test(separator)
+
+        if (isSep) {
+          const rows = tableLines.slice(2).map(parseRow)
+
+          elements.push(
+            <div
+              key={`table-${i}`}
+              className="my-3 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70 shadow-md scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+            >
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-zinc-900/90 border-b border-zinc-800">
+                    {headers.map((h, hi) => (
+                      <th
+                        key={hi}
+                        className="px-3.5 py-2.5 text-zinc-300 font-semibold tracking-wider uppercase text-[10px] whitespace-nowrap bg-zinc-900/90"
+                      >
+                        {processInline(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {rows.map((row, ri) => (
+                    <tr
+                      key={ri}
+                      className="hover:bg-zinc-900/50 transition-colors even:bg-zinc-950/30"
+                    >
+                      {row.map((cell, ci) => (
+                        <td
+                          key={ci}
+                          className="px-3.5 py-2 text-zinc-300 whitespace-nowrap font-normal"
+                        >
+                          {processInline(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+
+          i = j
+          continue
+        }
+      }
+    }
+
+    // 3. Fenced Code Block
+    if (trimmed.startsWith('```')) {
+      const codeLines: string[] = []
+      let j = i + 1
+      while (j < lines.length && !lines[j].trim().startsWith('```')) {
+        codeLines.push(lines[j])
+        j++
+      }
       elements.push(
-        <div key={i} className="flex items-start space-x-1.5 ml-1">
-          <span className="text-zinc-500 flex-shrink-0 mt-[2px]">•</span>
-          <span>{processed}</span>
+        <div key={`code-${i}`} className="my-2.5 rounded-xl border border-zinc-800 bg-zinc-950 p-3 overflow-x-auto font-mono text-xs text-indigo-300">
+          <pre><code>{codeLines.join('\n')}</code></pre>
         </div>
       )
-    } else {
-      elements.push(<p key={i}>{processed}</p>)
+      i = j < lines.length ? j + 1 : j
+      continue
     }
+
+    // 4. Headings
+    if (trimmed.startsWith('### ')) {
+      elements.push(
+        <h3 key={`h3-${i}`} className="text-[13px] font-bold text-zinc-100 mt-3 mb-1 flex items-center space-x-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block flex-shrink-0" />
+          <span>{processInline(trimmed.substring(4))}</span>
+        </h3>
+      )
+      i++
+      continue
+    }
+    if (trimmed.startsWith('## ')) {
+      elements.push(
+        <h2 key={`h2-${i}`} className="text-sm font-bold text-zinc-100 mt-3.5 mb-1.5 pb-1 border-b border-zinc-800/60">
+          {processInline(trimmed.substring(3))}
+        </h2>
+      )
+      i++
+      continue
+    }
+    if (trimmed.startsWith('# ')) {
+      elements.push(
+        <h1 key={`h1-${i}`} className="text-base font-bold text-white mt-4 mb-2 pb-1 border-b border-zinc-800">
+          {processInline(trimmed.substring(2))}
+        </h1>
+      )
+      i++
+      continue
+    }
+
+    // 5. Blockquote
+    if (trimmed.startsWith('> ')) {
+      elements.push(
+        <blockquote key={`quote-${i}`} className="border-l-2 border-indigo-500 pl-3 py-1 my-2 bg-indigo-950/20 rounded-r-lg text-zinc-300 italic text-xs">
+          {processInline(trimmed.substring(2))}
+        </blockquote>
+      )
+      i++
+      continue
+    }
+
+    // 6. Horizontal Rule
+    if (trimmed === '---' || trimmed === '***') {
+      elements.push(<hr key={`hr-${i}`} className="my-3 border-zinc-800" />)
+      i++
+      continue
+    }
+
+    // 7. Numbered List
+    const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/)
+    if (numMatch) {
+      elements.push(
+        <div key={`num-${i}`} className="flex items-start space-x-2 my-1 ml-0.5">
+          <span className="text-[11px] font-bold text-indigo-400 flex-shrink-0 min-w-[1.2rem] mt-0.5">
+            {numMatch[1]}.
+          </span>
+          <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
+            {processInline(numMatch[2])}
+          </span>
+        </div>
+      )
+      i++
+      continue
+    }
+
+    // 8. Bullet List
+    if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
+      const content = trimmed.replace(/^[-•*]\s+/, '')
+      elements.push(
+        <div key={`bullet-${i}`} className="flex items-start space-x-2 my-1 ml-0.5">
+          <span className="text-violet-400 flex-shrink-0 mt-1 text-xs leading-none">•</span>
+          <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
+            {processInline(content)}
+          </span>
+        </div>
+      )
+      i++
+      continue
+    }
+
+    // 9. Standard Paragraph
+    elements.push(
+      <p key={`p-${i}`} className="my-1 text-zinc-200 text-[13px] leading-relaxed">
+        {processInline(line)}
+      </p>
+    )
+    i++
   }
 
   return <>{elements}</>
 }
 
 function processInline(text: string): React.ReactNode {
-  // Handle **bold** and `code`
   const parts: React.ReactNode[] = []
   let remaining = text
   let keyCounter = 0
 
   while (remaining.length > 0) {
-    // Check for bold
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/)
+    const italicMatch = remaining.match(/(?<!\*)\*([^*]+?)\*(?!\*)/)
     const codeMatch = remaining.match(/`(.+?)`/)
-    // Check for [Document: xxx] citations
     const docMatch = remaining.match(/\[Document:\s*(.+?)\]/)
 
-    // Find the earliest match
     const matches = [
       boldMatch ? { type: 'bold', match: boldMatch } : null,
+      italicMatch ? { type: 'italic', match: italicMatch } : null,
       codeMatch ? { type: 'code', match: codeMatch } : null,
       docMatch ? { type: 'doc', match: docMatch } : null,
     ]
@@ -456,7 +617,6 @@ function processInline(text: string): React.ReactNode {
     const first = matches[0]!
     const idx = first.match.index || 0
 
-    // Add text before the match
     if (idx > 0) {
       parts.push(remaining.substring(0, idx))
     }
@@ -467,17 +627,23 @@ function processInline(text: string): React.ReactNode {
           {first.match[1]}
         </strong>
       )
+    } else if (first.type === 'italic') {
+      parts.push(
+        <em key={`i-${keyCounter++}`} className="text-zinc-300 italic">
+          {first.match[1]}
+        </em>
+      )
     } else if (first.type === 'code') {
       parts.push(
-        <code key={`c-${keyCounter++}`} className="px-1 py-0.5 bg-zinc-800 rounded text-indigo-300 text-[12px]">
+        <code key={`c-${keyCounter++}`} className="px-1.5 py-0.5 bg-zinc-800/80 border border-zinc-700/60 rounded text-indigo-300 font-mono text-[11px]">
           {first.match[1]}
         </code>
       )
     } else if (first.type === 'doc') {
       parts.push(
-        <span key={`d-${keyCounter++}`} className="inline-flex items-center space-x-1 text-indigo-400 font-semibold text-[11px]">
-          <FileText className="w-3 h-3 inline" />
-          <span>{first.match[1]}</span>
+        <span key={`d-${keyCounter++}`} className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/60 text-indigo-300 font-medium text-[10px] mx-0.5">
+          <FileText className="w-2.5 h-2.5 text-indigo-400 inline flex-shrink-0" />
+          <span className="truncate max-w-[140px]">{first.match[1]}</span>
         </span>
       )
     }
@@ -487,3 +653,4 @@ function processInline(text: string): React.ReactNode {
 
   return <>{parts}</>
 }
+
