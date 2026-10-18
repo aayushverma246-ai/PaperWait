@@ -122,6 +122,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Search for similar chunks using the database function
+    // Extract meaningful query keywords for precision filtering
+    const queryKeywords = query
+      .toLowerCase()
+      .split(/[\s,.;:!?/\\(){}[\]"']+/)
+      .filter(t => t.length >= 2 && !STOP_WORDS.has(t))
+
+    // 2. Search for similar chunks using the database function
     let matches: any[] = []
     try {
       const { data: rpcMatches, error: searchError } = await supabase.rpc(
@@ -129,8 +136,8 @@ export async function POST(request: NextRequest) {
         {
           query_embedding: `[${queryEmbedding.join(',')}]`,
           match_user_id: user.id,
-          match_threshold: 0.15,
-          match_count: clampedLimit * 2, // Fetch extra for deduplication
+          match_threshold: 0.35, // Fetch candidates for fine-grained ranking
+          match_count: clampedLimit * 3,
         }
       )
 
@@ -143,11 +150,12 @@ export async function POST(request: NextRequest) {
       console.error('Vector search exception:', err)
     }
 
-    // 3. Keyword fallback if vector matches are few or if user queried a direct keyword
+    // 3. Keyword fallback in document titles
     const matchedDocIds = new Set(matches.map(m => m.document_id))
     try {
       const queryTerm = query.trim()
-      const { data: fallbackDocs } = await supabase
+      // First try full phrase
+      const { data: directDocs } = await supabase
         .from('documents')
         .select('id, file_name, file_type, description, ocr_text, created_at, storage_path')
         .eq('user_id', user.id)
@@ -155,8 +163,8 @@ export async function POST(request: NextRequest) {
         .ilike('file_name', `%${queryTerm}%`)
         .limit(clampedLimit)
 
-      if (fallbackDocs && fallbackDocs.length > 0) {
-        for (const fbDoc of fallbackDocs) {
+      if (directDocs && directDocs.length > 0) {
+        for (const fbDoc of directDocs) {
           if (!matchedDocIds.has(fbDoc.id)) {
             matchedDocIds.add(fbDoc.id)
             matches.unshift({
@@ -166,8 +174,39 @@ export async function POST(request: NextRequest) {
               chunk_text: fbDoc.ocr_text ? fbDoc.ocr_text.substring(0, 400) : fbDoc.file_name,
               page_number: 1,
               source_metadata: { fileName: fbDoc.file_name, documentId: fbDoc.id },
-              similarity: 0.95, // Direct title match
+              similarity: 0.98,
             })
+          }
+        }
+      }
+
+      // Also try individual keywords if query has terms
+      if (queryKeywords.length > 0 && matches.length < 5) {
+        for (const kw of queryKeywords.slice(0, 3)) {
+          if (kw.length < 3) continue
+          const { data: kwDocs } = await supabase
+            .from('documents')
+            .select('id, file_name, file_type, description, ocr_text, created_at, storage_path')
+            .eq('user_id', user.id)
+            .eq('status', 'done')
+            .ilike('file_name', `%${kw}%`)
+            .limit(3)
+
+          if (kwDocs) {
+            for (const doc of kwDocs) {
+              if (!matchedDocIds.has(doc.id)) {
+                matchedDocIds.add(doc.id)
+                matches.push({
+                  id: doc.id,
+                  document_id: doc.id,
+                  chunk_index: 0,
+                  chunk_text: doc.ocr_text ? doc.ocr_text.substring(0, 400) : doc.file_name,
+                  page_number: 1,
+                  source_metadata: { fileName: doc.file_name, documentId: doc.id },
+                  similarity: 0.88,
+                })
+              }
+            }
           }
         }
       }
@@ -179,18 +218,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ results: [], query })
     }
 
-    // 4. Deduplicate by document — keep best match per document
-    type ChunkMatch = (typeof matches)[number]
+    // 4. Precision Filter: Reject irrelevant noise and require true relevance
+    matches.sort((a, b) => b.similarity - a.similarity)
+    const topScore = matches[0]?.similarity || 0
+
+    // If top candidate doesn't meet the baseline relevance floor, return not found
+    if (topScore < 0.48) {
+      return NextResponse.json({ results: [], query })
+    }
+
+    // Drop-off filter: Discard low-relevance results far below the top match
+    const dynamicFloor = Math.max(0.48, topScore - 0.15)
+
+    const filteredMatches = matches.filter(match => {
+      const sim = match.similarity
+      if (sim >= 0.80) return true // Direct keyword match
+
+      const textLower = (match.chunk_text || '').toLowerCase()
+      const titleLower = (match.source_metadata?.fileName || '').toLowerCase()
+      const hasKeyword = queryKeywords.some(kw => kw.length >= 3 && (textLower.includes(kw) || titleLower.includes(kw)))
+
+      // If document contains explicit keywords from the query, allow slightly lower similarity
+      if (hasKeyword && sim >= 0.44) return true
+
+      // Pure vector similarity without keywords: must meet dynamic threshold
+      return sim >= dynamicFloor
+    })
+
+    if (filteredMatches.length === 0) {
+      return NextResponse.json({ results: [], query })
+    }
+
+    // 5. Deduplicate by document — keep best match per document
+    type ChunkMatch = (typeof filteredMatches)[number]
     const seenDocuments = new Map<string, ChunkMatch>()
     const deduplicatedMatches: ChunkMatch[] = []
 
-    for (const match of matches) {
+    for (const match of filteredMatches) {
       const existing = seenDocuments.get(match.document_id)
       if (!existing) {
         seenDocuments.set(match.document_id, match)
         deduplicatedMatches.push(match)
       }
-      // Allow up to 2 chunks per document for context
       else if (
         deduplicatedMatches.filter((m: ChunkMatch) => m.document_id === match.document_id).length < 2
       ) {

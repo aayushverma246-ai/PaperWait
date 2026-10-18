@@ -257,10 +257,10 @@ export default function DocumentChat() {
       {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-xl ${
+        className={`fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-xl ${
           isOpen
-            ? 'bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 shadow-zinc-900/50 rotate-0'
-            : 'bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-indigo-500/30 hover:shadow-indigo-500/40 hover:scale-105'
+            ? 'hidden sm:flex bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 shadow-zinc-900/50'
+            : 'flex bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-indigo-500/30 hover:shadow-indigo-500/40 hover:scale-105'
         }`}
         title={isOpen ? 'Close AI Chat' : 'Open AI Chat'}
       >
@@ -271,9 +271,12 @@ export default function DocumentChat() {
         )}
       </button>
 
-      {/* Chat Panel */}
+      {/* Chat Panel - Full responsive bottom sheet on mobile, floating card on desktop */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(480px,calc(100vw-2rem))] h-[min(640px,calc(100vh-7rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden animate-scale-up">
+        <div className="fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-24 sm:right-6 z-50 w-full sm:w-[460px] h-[92vh] sm:h-[min(640px,calc(100vh-7rem))] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-scale-up">
+          {/* Mobile Sheet Drag Indicator */}
+          <div className="w-10 h-1 bg-zinc-700/80 rounded-full mx-auto mt-2 mb-0.5 sm:hidden flex-shrink-0" />
+
           {/* Header with Official PaperWait Logo */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center space-x-2.5">
@@ -298,6 +301,7 @@ export default function DocumentChat() {
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
+                title="Close Chat"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -362,9 +366,9 @@ export default function DocumentChat() {
               /* Message bubbles */
               messages.map((msg, idx) => (
                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`${msg.role === 'user' ? 'max-w-[85%] order-2' : 'max-w-[96%] order-1'}`}>
+                  <div className={`${msg.role === 'user' ? 'max-w-[88%] sm:max-w-[85%] order-2' : 'max-w-[96%] order-1'}`}>
                     {/* Message bubble */}
-                    <div className={`px-4 py-3 rounded-2xl text-[13px] leading-relaxed ${
+                    <div className={`px-4 py-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed ${
                       msg.role === 'user'
                         ? 'bg-indigo-600 text-white rounded-br-md shadow-sm'
                         : msg.error
@@ -372,7 +376,7 @@ export default function DocumentChat() {
                           : 'bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-bl-md shadow-sm'
                     }`}>
                       {msg.role === 'assistant' ? (
-                        <div className="text-[13px] leading-relaxed text-zinc-200">
+                        <div className="text-xs sm:text-[13px] leading-relaxed text-zinc-200">
                           {formatMarkdown(msg.content)}
                         </div>
                       ) : (
@@ -432,8 +436,8 @@ export default function DocumentChat() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input area */}
-          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/50 p-3">
+          {/* Input area - Mobile optimized */}
+          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/70 p-3 pb-5 sm:pb-3">
             <div className="flex items-end space-x-2">
               <textarea
                 ref={inputRef}
@@ -442,14 +446,14 @@ export default function DocumentChat() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about your documents..."
                 rows={1}
-                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-600 text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[100px] overflow-y-auto"
-                style={{ minHeight: '40px' }}
+                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-600 text-base sm:text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[100px] overflow-y-auto"
+                style={{ minHeight: '42px' }}
                 disabled={loading}
               />
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || loading}
-                className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-md shadow-indigo-500/20"
+                className="flex-shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-md shadow-indigo-500/20"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin text-white" />

@@ -603,35 +603,37 @@ export default function DashboardPage() {
         />
         <button
           onClick={() => setIsSemanticSearch(!isSemanticSearch)}
-          className={`flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ease-out cursor-pointer flex-shrink-0 border ${
+          className={`flex items-center justify-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ease-out cursor-pointer flex-shrink-0 border ${
             isSemanticSearch
-              ? 'bg-gradient-to-r from-violet-600/25 to-indigo-600/25 border-violet-500/50 text-violet-300 hover:border-violet-400'
-              : 'bg-zinc-900/30 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+              ? 'bg-gradient-to-r from-indigo-600/25 to-violet-600/25 border-indigo-500/50 text-indigo-300 hover:border-indigo-400 shadow-sm shadow-indigo-500/10'
+              : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
           }`}
           title={isSemanticSearch ? 'Switch to keyword search' : 'Switch to AI semantic search'}
         >
-          <Sparkles className={`w-4 h-4 ${isSemanticSearch ? 'text-violet-400' : 'text-zinc-400'}`} />
-          <span className="hidden sm:inline">{isSemanticSearch ? 'AI Search Active' : 'AI Search'}</span>
+          <Sparkles className={`w-4 h-4 ${isSemanticSearch ? 'text-indigo-400' : 'text-zinc-400'}`} />
+          <span className="inline">{isSemanticSearch ? 'AI Active' : 'AI Search'}</span>
         </button>
       </div>
 
       {isSemanticSearch && !searchQuery ? (
         /* AI Search helper card when search box is empty */
-        <div className="p-5 bg-gradient-to-r from-violet-950/20 via-indigo-950/15 to-zinc-900/20 border border-violet-900/30 rounded-2xl animate-fade-in">
-          <div className="flex items-center space-x-3 mb-2">
-            <Sparkles className="w-4 h-4 text-violet-400" />
-            <h3 className="text-sm font-semibold text-zinc-200">AI Semantic Search is Active</h3>
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950/20 via-violet-950/15 to-zinc-900/20 border border-indigo-900/30 rounded-2xl animate-fade-in">
+          <div className="flex items-center space-x-2.5 mb-2">
+            <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-zinc-200">AI Semantic Search Active</h3>
           </div>
-          <p className="text-xs text-zinc-400 mb-3 max-w-xl">
+          <p className="text-xs text-zinc-400 mb-3 max-w-xl leading-relaxed">
             Search by meaning, questions, or concepts instead of exact keywords. All uploaded documents are automatically analyzed and indexed.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-zinc-500 font-medium">Try searching:</span>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-[11px] text-zinc-500 font-medium w-full sm:w-auto mb-0.5 sm:mb-0">Try searching:</span>
             {['Show my resume and internship experience', 'Find GATE exam application', 'Hotel booking receipts', 'Lecture notes on SOLID principles'].map((suggestion) => (
               <button
                 key={suggestion}
                 onClick={() => setSearchQuery(suggestion)}
-                className="text-xs px-2.5 py-1 rounded-lg bg-zinc-900/80 border border-zinc-800 text-zinc-300 hover:text-white hover:border-violet-500/50 hover:bg-violet-950/30 transition-all cursor-pointer"
+                className="text-xs px-2.5 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:text-white hover:border-indigo-500/50 hover:bg-indigo-950/30 transition-all cursor-pointer text-left"
               >
                 {suggestion}
               </button>
