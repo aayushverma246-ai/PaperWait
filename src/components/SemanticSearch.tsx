@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
-import { Sparkles, Loader2, ChevronRight, Zap, RefreshCw } from 'lucide-react'
+import React, { useState, useCallback, useMemo } from 'react'
+import { Sparkles, Loader2, ChevronRight, RefreshCw, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 interface SemanticResult {
@@ -14,6 +14,7 @@ interface SemanticResult {
   similarity: number
   folderName: string
   createdAt: string
+  signedUrl?: string | null
 }
 
 interface SemanticSearchProps {
@@ -23,11 +24,73 @@ interface SemanticSearchProps {
   onSelectQuery?: (q: string) => void
 }
 
+const STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
+  'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
+  'to', 'was', 'were', 'will', 'with', 'what', 'where', 'who', 'how',
+  'find', 'show', 'get', 'search', 'me', 'my', 'all', 'please'
+])
+
+/**
+ * Strips internal OCR page delimiters and markdown symbols from snippet text
+ */
+function cleanSnippetText(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/---+\s*(?:Page\s*\d+|Sheet:\s*[^-\n]+)\s*---+/gi, ' ')
+    .replace(/(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
+ * Highlights matched query keywords with elegant glowing violet mark
+ */
+function highlightKeywords(text: string, query: string): React.ReactNode {
+  if (!text || !query.trim()) return text
+
+  const rawTerms = query
+    .trim()
+    .toLowerCase()
+    .split(/[\s,.;:!?/\\(){}[\]"']+/)
+    .filter(t => t.length >= 2 && !STOP_WORDS.has(t))
+
+  const terms = rawTerms.length > 0 
+    ? rawTerms 
+    : query.trim().toLowerCase().split(/\s+/).filter(t => t.length >= 2)
+
+  if (terms.length === 0) return text
+
+  // Escape special regex characters
+  const escapedTerms = terms.map(t => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+  const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi')
+
+  const parts = text.split(pattern)
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        pattern.test(part) ? (
+          <mark
+            key={i}
+            className="bg-violet-500/25 text-violet-200 px-1 py-0.5 rounded font-medium border border-violet-500/30"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
+  )
+}
+
 export default function SemanticSearch({ isActive, query, onToggle, onSelectQuery }: SemanticSearchProps) {
   const [results, setResults] = useState<SemanticResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastQuery, setLastQuery] = useState('')
+  const [imgErrors, setImgErrors] = useState<Set<string>>(new Set())
 
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
@@ -52,7 +115,6 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
 
       const data = await response.json()
       setResults(data.results || [])
-      setLastQuery(searchQuery)
     } catch (err: any) {
       setError(err.message || 'Search failed')
       setResults([])
@@ -78,7 +140,6 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
   React.useEffect(() => {
     if (!isActive) {
       setResults([])
-      setLastQuery('')
       setError(null)
     }
   }, [isActive])
@@ -100,24 +161,26 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
 
   return (
     <div className="animate-fade-in">
-      {/* Results header */}
-      <div className="flex items-center justify-between mb-4 border-b border-zinc-800/60 pb-3">
-        <div className="flex items-center space-x-3">
-          <Sparkles className="w-4 h-4 text-violet-400" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-300">
+      {/* Sleek Results header */}
+      <div className="flex items-center justify-between mb-3 border-b border-zinc-850 pb-3">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-6 h-6 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+          </div>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
             AI Semantic Search Results
           </h2>
           <span className="text-xs text-zinc-500 hidden sm:inline">for &ldquo;{query}&rdquo;</span>
         </div>
         <div className="flex items-center space-x-2">
-          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />}
-          <span className="text-xs bg-violet-950/40 text-violet-300 border border-violet-800/50 font-semibold px-2.5 py-1 rounded-full">
+          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />}
+          <span className="text-xs bg-violet-950/40 text-violet-300 border border-violet-800/50 font-medium px-2.5 py-0.5 rounded-full shadow-sm shadow-violet-950/30">
             {loading ? 'Searching meaning...' : `${results.length} match${results.length === 1 ? '' : 'es'}`}
           </span>
           <button
             onClick={() => performSearch(query)}
             disabled={loading}
-            className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors border border-transparent hover:border-zinc-700/50 cursor-pointer"
             title="Refresh search"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -127,25 +190,30 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
 
       {/* Error state */}
       {error && (
-        <div className="p-4 bg-red-950/20 border border-red-900/30 rounded-xl mb-4 animate-fade-in">
-          <p className="text-xs text-red-400 font-medium">{error}</p>
-          <p className="text-[10px] text-red-500/70 mt-1">
-            Tip: Documents are automatically indexed in the background. If this persists, please try refreshing the search.
-          </p>
+        <div className="p-4 bg-red-950/20 border border-red-900/30 rounded-xl mb-4 animate-fade-in flex items-start space-x-3">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs text-red-400 font-medium">{error}</p>
+            <p className="text-[10px] text-red-500/70 mt-1">
+              Tip: Documents are automatically indexed in the background. If this persists, please try refreshing the search.
+            </p>
+          </div>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !error && results.length === 0 && query.trim() && (
         <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 bg-zinc-900/10 border border-zinc-850 rounded-2xl">
-          <Sparkles className="w-8 h-8 text-violet-400/40 mb-3" />
-          <p className="font-semibold text-zinc-300 text-sm">No semantic matches found for &ldquo;{query}&rdquo;</p>
-          <p className="text-xs text-zinc-500 mt-1 max-w-sm">
-            Try searching for related keywords or questions, or switch back to standard keyword search.
+          <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-3">
+            <Sparkles className="w-6 h-6 text-violet-400/70" />
+          </div>
+          <p className="font-semibold text-zinc-200 text-sm">No semantic matches found for &ldquo;{query}&rdquo;</p>
+          <p className="text-xs text-zinc-400 mt-1 max-w-sm">
+            Try searching for related concepts or questions, or switch back to standard keyword search.
           </p>
           {onSelectQuery && (
             <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-              <span className="text-[11px] text-zinc-500">Suggestions:</span>
+              <span className="text-[11px] text-zinc-500 font-medium">Suggestions:</span>
               {['resume', 'application', 'booking', 'voucher'].map((s) => (
                 <button
                   key={s}
@@ -160,76 +228,102 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
         </div>
       )}
 
-      {/* Results */}
+      {/* Results List */}
       {results.length > 0 && (
-        <div className="bg-zinc-900/10 border border-zinc-850 rounded-2xl overflow-hidden divide-y divide-zinc-900">
+        <div className="bg-zinc-900/20 backdrop-blur-sm border border-zinc-850 rounded-2xl overflow-hidden divide-y divide-zinc-850/60 shadow-xl shadow-black/20">
           {results.map((result, idx) => {
             const ext = getFileExt(result.fileName)
             const badgeColor = getBadgeColor(ext)
+            const cleanSnippet = cleanSnippetText(result.snippet)
+            const isImg = ['png', 'jpg', 'jpeg', 'webp'].includes(ext)
+
+            const linkHref = result.pageNumber
+              ? `/dashboard/document/${result.documentId}?page=${result.pageNumber}&search=${encodeURIComponent(query)}`
+              : `/dashboard/document/${result.documentId}?search=${encodeURIComponent(query)}`
 
             return (
               <Link
                 key={`${result.documentId}-${idx}`}
-                href={
-                  result.pageNumber
-                    ? `/dashboard/document/${result.documentId}?page=${result.pageNumber}`
-                    : `/dashboard/document/${result.documentId}`
-                }
+                href={linkHref}
                 onClick={() => {
                   if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('app-loading-start', {
-                      detail: { title: 'Loading', subtitle: 'Opening document...' }
-                    }))
+                    window.dispatchEvent(
+                      new CustomEvent('app-loading-start', {
+                        detail: { title: 'Loading', subtitle: 'Opening document...' },
+                      })
+                    )
                   }
                 }}
-                className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all duration-200 ease-out gap-4 animate-fade-in"
+                className="group flex items-start sm:items-center justify-between p-4 hover:bg-zinc-900/50 transition-all duration-200 ease-out gap-4 animate-fade-in"
               >
-                <div className="flex items-center space-x-4 min-w-0 flex-1">
-                  {/* File type badge */}
-                  <div className={`w-10 h-10 rounded-lg border ${badgeColor} flex-shrink-0 flex items-center justify-center text-[10px] tracking-wider uppercase font-bold`}>
-                    {ext}
-                  </div>
+                <div className="flex items-start sm:items-center space-x-3.5 min-w-0 flex-1">
+                  {/* File type badge / thumbnail */}
+                  {result.signedUrl && isImg && !imgErrors.has(result.documentId) ? (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-violet-500/30 transition-all flex items-center justify-center mt-0.5 sm:mt-0">
+                      <img
+                        src={result.signedUrl}
+                        alt={result.fileName}
+                        className="w-full h-full object-cover"
+                        loading="eager"
+                        onError={() => {
+                          setImgErrors(prev => new Set(prev).add(result.documentId))
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`w-10 h-10 rounded-lg border ${badgeColor} flex-shrink-0 flex items-center justify-center text-[10px] tracking-wider uppercase font-bold mt-0.5 sm:mt-0`}
+                    >
+                      {ext}
+                    </div>
+                  )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-zinc-200 font-semibold truncate group-hover:text-white transition-colors">
-                      {result.fileName}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-500">
+                    {/* Document Title */}
+                    <div className="flex items-center space-x-2">
+                      <p className="text-zinc-200 font-semibold text-sm group-hover:text-white transition-colors truncate">
+                        {highlightKeywords(result.fileName, query)}
+                      </p>
+                    </div>
+
+                    {/* Metadata Pills */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs">
                       {result.folderName && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-400">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800 text-zinc-400">
                           {result.folderName}
                         </span>
                       )}
                       {result.pageNumber && (
-                        <>
-                          <span className="text-zinc-700">•</span>
-                          <span className="text-[10px] text-indigo-400 font-semibold">
-                            Page {result.pageNumber}
-                          </span>
-                        </>
+                        <span className="inline-flex items-center text-[10px] text-indigo-400 bg-indigo-950/30 border border-indigo-900/50 px-2 py-0.5 rounded-md font-medium">
+                          Page {result.pageNumber}
+                        </span>
                       )}
                       {result.section && (
-                        <>
-                          <span className="text-zinc-700">•</span>
-                          <span className="text-[10px] text-indigo-400 font-semibold">
-                            {result.section}
-                          </span>
-                        </>
+                        <span className="inline-flex items-center text-[10px] text-indigo-400 bg-indigo-950/30 border border-indigo-900/50 px-2 py-0.5 rounded-md font-medium">
+                          {result.section}
+                        </span>
                       )}
-                      <span className="text-zinc-700">•</span>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-violet-400 font-semibold">
-                        <Zap className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-300 bg-violet-950/40 border border-violet-800/50 px-2 py-0.5 rounded-full shadow-sm shadow-violet-950/30">
+                        <Sparkles className="w-2.5 h-2.5 text-violet-400" />
                         {Math.round(result.similarity * 100)}% match
                       </span>
                     </div>
-                    {/* Snippet */}
-                    <p className="text-[11px] text-zinc-400 mt-1.5 line-clamp-2 hidden sm:block font-mono bg-zinc-900/40 p-2 rounded-lg border border-zinc-800/40">
-                      {result.snippet}
-                    </p>
+
+                    {/* Refined Excerpt (No ugly monospace box, clean quote line with keyword highlights) */}
+                    {cleanSnippet && (
+                      <div className="mt-2 pl-3 border-l-2 border-violet-500/30 group-hover:border-violet-400/60 transition-colors">
+                        <p className="text-xs text-zinc-400 group-hover:text-zinc-300 leading-relaxed line-clamp-2">
+                          {highlightKeywords(cleanSnippet, query)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-1 transition-transform duration-300 ease-out hidden sm:block flex-shrink-0" />
+                {/* Right Arrow / Action */}
+                <div className="flex items-center flex-shrink-0 self-center">
+                  <ChevronRight className="w-5 h-5 text-zinc-700 group-hover:text-violet-400 group-hover:translate-x-1 transition-all duration-300 ease-out hidden sm:block" />
+                </div>
               </Link>
             )
           })}
@@ -237,7 +331,7 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
       )}
 
       {/* Privacy notice */}
-      <p className="text-[10px] text-zinc-600 mt-3 text-center">
+      <p className="text-[11px] text-zinc-500/80 mt-3 text-center">
         Semantic search understands meaning across all your documents powered by Cloudflare Workers AI.
       </p>
     </div>

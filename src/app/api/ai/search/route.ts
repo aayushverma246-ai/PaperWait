@@ -14,6 +14,76 @@ import { generateQueryEmbedding } from '@/utils/semantic/embeddings'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+const STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
+  'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
+  'to', 'was', 'were', 'will', 'with', 'what', 'where', 'who', 'how',
+  'find', 'show', 'get', 'search', 'me', 'my', 'all', 'please'
+])
+
+// Helper to strip internal OCR delimiters and markdown artifacts
+function cleanOcrText(rawText: string): string {
+  if (!rawText) return ''
+  return rawText
+    .replace(/---+\s*(?:Page\s*\d+|Sheet:\s*[^-\n]+)\s*---+/gi, ' ')
+    .replace(/(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+// Helper to extract a clean window of text centered on matched terms
+function extractRelevantSnippet(rawText: string, searchPhrase: string, targetLength: number = 220): string {
+  const cleaned = cleanOcrText(rawText)
+  if (!cleaned || cleaned.length <= targetLength) return cleaned
+
+  const terms = searchPhrase
+    .toLowerCase()
+    .split(/[\s,.;:!?/\\(){}[\]"']+/)
+    .filter(t => t.length >= 2 && !STOP_WORDS.has(t))
+
+  let bestMatchIndex = -1
+  for (const term of terms) {
+    const idx = cleaned.toLowerCase().indexOf(term)
+    if (idx !== -1 && (bestMatchIndex === -1 || idx < bestMatchIndex)) {
+      bestMatchIndex = idx
+    }
+  }
+
+  if (bestMatchIndex === -1 || bestMatchIndex < 40) {
+    let snippet = cleaned.substring(0, targetLength)
+    const lastSpace = snippet.lastIndexOf(' ')
+    if (lastSpace > targetLength * 0.7) {
+      snippet = snippet.substring(0, lastSpace)
+    }
+    return snippet.trimEnd() + '...'
+  }
+
+  const startOffset = Math.max(0, bestMatchIndex - 50)
+  let actualStart = startOffset
+  if (actualStart > 0) {
+    const nextSpace = cleaned.indexOf(' ', actualStart)
+    if (nextSpace !== -1 && nextSpace - actualStart < 20) {
+      actualStart = nextSpace + 1
+    }
+  }
+
+  const endOffset = Math.min(cleaned.length, actualStart + targetLength)
+  let actualEnd = endOffset
+  if (actualEnd < cleaned.length) {
+    const prevSpace = cleaned.lastIndexOf(' ', actualEnd)
+    if (prevSpace > actualStart && actualEnd - prevSpace < 20) {
+      actualEnd = prevSpace
+    }
+  }
+
+  let snippet = cleaned.substring(actualStart, actualEnd).trim()
+  if (actualStart > 0) snippet = '...' + snippet
+  if (actualEnd < cleaned.length) snippet = snippet + '...'
+
+  return snippet
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
 
@@ -79,7 +149,7 @@ export async function POST(request: NextRequest) {
       const queryTerm = query.trim()
       const { data: fallbackDocs } = await supabase
         .from('documents')
-        .select('id, file_name, file_type, description, ocr_text, created_at')
+        .select('id, file_name, file_type, description, ocr_text, created_at, storage_path')
         .eq('user_id', user.id)
         .eq('status', 'done')
         .ilike('file_name', `%${queryTerm}%`)
@@ -93,7 +163,7 @@ export async function POST(request: NextRequest) {
               id: fbDoc.id,
               document_id: fbDoc.id,
               chunk_index: 0,
-              chunk_text: fbDoc.ocr_text ? fbDoc.ocr_text.substring(0, 300) : fbDoc.file_name,
+              chunk_text: fbDoc.ocr_text ? fbDoc.ocr_text.substring(0, 400) : fbDoc.file_name,
               page_number: 1,
               source_metadata: { fileName: fbDoc.file_name, documentId: fbDoc.id },
               similarity: 0.95, // Direct title match
@@ -109,7 +179,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ results: [], query })
     }
 
-    // 3. Deduplicate by document — keep best match per document
+    // 4. Deduplicate by document — keep best match per document
     type ChunkMatch = (typeof matches)[number]
     const seenDocuments = new Map<string, ChunkMatch>()
     const deduplicatedMatches: ChunkMatch[] = []
@@ -128,11 +198,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Fetch document metadata for the matched documents
+    // 5. Fetch document metadata for the matched documents
     const uniqueDocIds = [...new Set(deduplicatedMatches.map((m: ChunkMatch) => m.document_id))]
     const { data: documents, error: docError } = await supabase
       .from('documents')
-      .select('id, file_name, file_type, description, status, created_at')
+      .select('id, file_name, file_type, description, status, created_at, storage_path')
       .in('id', uniqueDocIds)
       .eq('user_id', user.id)
 
@@ -142,18 +212,36 @@ export async function POST(request: NextRequest) {
 
     const docMap = new Map((documents || []).map(d => [d.id, d]))
 
-    // 5. Format results
+    // Generate signed URLs for preview thumbnails if applicable (for images)
+    const imageDocPaths = (documents || [])
+      .filter(d => d.storage_path && (d.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(d.file_name)))
+      .map(d => d.storage_path)
+
+    const signedUrlMap = new Map<string, string>()
+    if (imageDocPaths.length > 0) {
+      try {
+        const { data: signedUrls } = await supabase.storage
+          .from('documents')
+          .createSignedUrls(imageDocPaths, 3600)
+        if (signedUrls) {
+          for (const item of signedUrls) {
+            if (item.path && item.signedUrl) {
+              signedUrlMap.set(item.path, item.signedUrl)
+            }
+          }
+        }
+      } catch (storageErr) {
+        // silent fallback to badge
+      }
+    }
+
+    // 6. Format results with cleaned, contextual snippets
     const results = deduplicatedMatches
       .slice(0, clampedLimit)
       .map(match => {
         const doc = docMap.get(match.document_id)
         
-        // Build snippet: truncate chunk text
-        const snippetLength = 200
-        let snippet = match.chunk_text
-        if (snippet.length > snippetLength) {
-          snippet = snippet.substring(0, snippetLength).trimEnd() + '...'
-        }
+        const snippet = extractRelevantSnippet(match.chunk_text || '', query, 220)
 
         let folderInfo = ''
         if (doc?.description) {
@@ -162,6 +250,8 @@ export async function POST(request: NextRequest) {
             folderInfo = parsed.suggested_folder || ''
           } catch (e) { /* ignore */ }
         }
+
+        const signedUrl = doc?.storage_path ? signedUrlMap.get(doc.storage_path) || null : null
 
         return {
           documentId: match.document_id,
@@ -173,6 +263,7 @@ export async function POST(request: NextRequest) {
           similarity: Math.round(match.similarity * 100) / 100,
           folderName: folderInfo,
           createdAt: doc?.created_at,
+          signedUrl,
         }
       })
 
