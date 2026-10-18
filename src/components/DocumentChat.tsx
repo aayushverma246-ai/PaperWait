@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/utils/supabase/client'
 import {
   MessageSquare,
   X,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react'
 
 interface ChatMessage {
+  id?: string
   role: 'user' | 'assistant'
   content: string
   sources?: Array<{
@@ -28,6 +30,7 @@ interface ChatMessage {
     pageNumber: number | null
   }>
   error?: boolean
+  createdAt?: string
 }
 
 interface IndexStatus {
@@ -40,10 +43,12 @@ interface IndexStatus {
 }
 
 export default function DocumentChat() {
+  const supabase = createClient()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [indexing, setIndexing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -56,6 +61,56 @@ export default function DocumentChat() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Hydrate authenticated user and persistent chat history
+  useEffect(() => {
+    let active = true
+
+    async function loadUserAndChatHistory() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user || !active) return
+
+        const uid = user.id
+        setUserId(uid)
+
+        // 1. Instantly hydrate from localStorage for 0ms load time
+        const localCache = localStorage.getItem(`paperwait_chat_history_${uid}`)
+        if (localCache) {
+          try {
+            const parsed = JSON.parse(localCache)
+            if (Array.isArray(parsed) && parsed.length > 0 && active) {
+              setMessages(parsed)
+            }
+          } catch (e) {
+            // ignore corrupted cache
+          }
+        }
+
+        // 2. Fetch from Supabase database to sync across devices/sessions
+        try {
+          const res = await fetch('/api/ai/chat/history')
+          if (res.ok) {
+            const data = await res.json()
+            if (data?.messages && Array.isArray(data.messages) && data.messages.length > 0 && active) {
+              setMessages(data.messages)
+              localStorage.setItem(`paperwait_chat_history_${uid}`, JSON.stringify(data.messages))
+            }
+          }
+        } catch (e) {
+          // graceful fallback to local cache
+        }
+      } catch (err) {
+        console.warn('Failed to load user chat history:', err)
+      }
+    }
+
+    loadUserAndChatHistory()
+
+    return () => {
+      active = false
+    }
+  }, [supabase])
 
   // Fetch index status when chat opens
   const fetchIndexStatus = useCallback(async () => {
@@ -114,6 +169,9 @@ export default function DocumentChat() {
     const userMessage: ChatMessage = { role: 'user', content: trimmed }
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
+    if (userId) {
+      localStorage.setItem(`paperwait_chat_history_${userId}`, JSON.stringify(updatedMessages))
+    }
     setInput('')
     setLoading(true)
 
@@ -140,13 +198,25 @@ export default function DocumentChat() {
         content: data.answer,
         sources: data.sources || [],
       }
-      setMessages(prev => [...prev, assistantMessage])
+      setMessages(prev => {
+        const next = [...prev, assistantMessage]
+        if (userId) {
+          localStorage.setItem(`paperwait_chat_history_${userId}`, JSON.stringify(next))
+        }
+        return next
+      })
     } catch (err: any) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: err.message || 'Something went wrong. Please try again.',
-        error: true,
-      }])
+      setMessages(prev => {
+        const next: ChatMessage[] = [...prev, {
+          role: 'assistant',
+          content: err.message || 'Something went wrong. Please try again.',
+          error: true,
+        }]
+        if (userId) {
+          localStorage.setItem(`paperwait_chat_history_${userId}`, JSON.stringify(next))
+        }
+        return next
+      })
     } finally {
       setLoading(false)
     }
@@ -159,9 +229,17 @@ export default function DocumentChat() {
     }
   }
 
-  const clearChat = () => {
+  const clearChat = async () => {
     setMessages([])
     setInput('')
+    if (userId) {
+      localStorage.removeItem(`paperwait_chat_history_${userId}`)
+    }
+    try {
+      await fetch('/api/ai/chat/history', { method: 'DELETE' })
+    } catch (err) {
+      console.warn('Failed to clear server chat history:', err)
+    }
   }
 
   const exampleQuestions = [
@@ -196,11 +274,11 @@ export default function DocumentChat() {
       {/* Chat Panel */}
       {isOpen && (
         <div className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(480px,calc(100vw-2rem))] h-[min(640px,calc(100vh-7rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden animate-scale-up">
-          {/* Header */}
+          {/* Header with Official PaperWait Logo */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                <Sparkles className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
+                <FileText className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">PaperWait AI</h3>
@@ -212,7 +290,7 @@ export default function DocumentChat() {
                 <button
                   onClick={clearChat}
                   className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
-                  title="New Chat"
+                  title="New Chat / Clear History"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -255,11 +333,11 @@ export default function DocumentChat() {
             {messages.length === 0 ? (
               /* Empty state */
               <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500/10 to-violet-600/10 border border-indigo-500/20 flex items-center justify-center mb-4">
-                  <Bot className="w-8 h-8 text-indigo-400" />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/10">
+                  <FileText className="w-7 h-7 text-indigo-400" />
                 </div>
                 <h4 className="text-sm font-bold text-zinc-300 mb-1">Ask about your documents</h4>
-                <p className="text-[11px] text-zinc-600 max-w-[280px] mb-6 leading-relaxed">
+                <p className="text-[11px] text-zinc-500 max-w-[280px] mb-6 leading-relaxed">
                   I can search through your uploaded documents and answer questions about their contents.
                 </p>
 
@@ -279,10 +357,6 @@ export default function DocumentChat() {
                     </button>
                   ))}
                 </div>
-
-                <p className="text-[9px] text-zinc-700 mt-5 max-w-[280px]">
-                  Your document text is sent to Groq and Cloudflare AI for processing. No data is stored by these providers.
-                </p>
               </div>
             ) : (
               /* Message bubbles */

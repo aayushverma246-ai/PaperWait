@@ -191,6 +191,25 @@ export async function POST(request: NextRequest) {
       pageNumber: s.pageNumber,
     }))
 
+    // 8. Persist chat history to database for the authenticated user
+    try {
+      await supabase.from('chat_messages').insert([
+        {
+          user_id: user.id,
+          role: 'user',
+          content: message.trim(),
+        },
+        {
+          user_id: user.id,
+          role: 'assistant',
+          content: answer,
+          sources,
+        },
+      ])
+    } catch (saveError) {
+      console.warn('Failed to persist chat message to database:', saveError)
+    }
+
     return NextResponse.json({
       answer,
       sources,
