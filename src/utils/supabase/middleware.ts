@@ -43,6 +43,7 @@ export async function updateSession(request: NextRequest) {
   if (
     (request.nextUrl.pathname === '/login' ||
      request.nextUrl.pathname === '/signup' ||
+     request.nextUrl.pathname === '/forgot-password' ||
      request.nextUrl.pathname === '/') &&
     user
   ) {

@@ -22,5 +22,9 @@ export async function GET(request: Request) {
     }
   }
 
+  if (next.includes('reset-password')) {
+    return NextResponse.redirect(`${origin}/reset-password?error=Invalid or expired reset link. Please request a new one.`)
+  }
+
   return NextResponse.redirect(`${origin}/login?error=Could not authenticate user`)
 }

@@ -108,6 +108,12 @@ export default function GlobalRouteLoader() {
       } else if (path === '/signup') {
         title = 'Sign Up'
         subtitle = 'Redirecting to signup portal...'
+      } else if (path.startsWith('/forgot-password')) {
+        title = 'Forgot Password'
+        subtitle = 'Opening recovery portal...'
+      } else if (path.startsWith('/reset-password')) {
+        title = 'Reset Password'
+        subtitle = 'Securing session credentials...'
       }
 
       // Dispatch loading start event
