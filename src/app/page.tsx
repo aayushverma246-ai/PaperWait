@@ -12,38 +12,20 @@ import {
   Menu, 
   Search, 
   UploadCloud, 
-  FolderOpen,
-  FileText,
-  Folder,
-  ChevronRight,
-  Plus,
-  ArrowLeft,
-  Loader2,
-  CheckCircle2,
-  Sparkles,
-  MessageSquare,
-  Bot,
-  Database,
-  Send,
-  ShieldCheck,
-  Cpu,
-  Layers,
+  FolderOpen, 
+  FileText, 
+  Folder, 
+  ChevronRight, 
+  Plus, 
+  ArrowLeft, 
+  Loader2, 
+  CheckCircle2, 
+  Sparkles, 
+  Bot, 
+  ShieldCheck, 
   FileSearch,
-  ExternalLink
+  MessageSquare
 } from 'lucide-react'
-
-// Custom inline SVG icons for Twitter and GitHub
-const TwitterIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-  </svg>
-)
-
-const GithubIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-  </svg>
-)
 
 // Authentic document samples for the feature visualizer sandbox
 const MOCK_DOCUMENTS = [
@@ -54,7 +36,7 @@ const MOCK_DOCUMENTS = [
     fileSize: '142 KB',
     ocrSnippet: 'INVOICE NUMBER: 10485\nDATE: 06/15/2026\nAMOUNT DUE: $148.20\nDUE DATE: 07/01/2026\nITEMS: Services Rendered - $148.20',
     classificationReason: 'Classified as Invoice based on structured billing headers, pricing lines, and payment terms.',
-    vectorEmbeddings: '1024 dims (Qwen3 dense vector)',
+    vectorStatus: 'Indexed & Searchable',
     sampleQuery: 'invoice amount due and payment terms',
     chatQA: {
       question: 'When is invoice #10485 due and what is the balance?',
@@ -69,7 +51,7 @@ const MOCK_DOCUMENTS = [
     fileSize: '1.2 MB',
     ocrSnippet: 'RETAIL RECEIPT\nDATE: 07/04/2026\nITEM A: $14.99\nITEM B: $8.49\nTOTAL: $23.48\nPAID: DEBIT CARD',
     classificationReason: 'Classified as Receipt based on point-of-sale layout and itemized pricing.',
-    vectorEmbeddings: '1024 dims (Qwen3 dense vector)',
+    vectorStatus: 'Indexed & Searchable',
     sampleQuery: 'retail receipt paid with debit card',
     chatQA: {
       question: 'What items were purchased on the retail receipt and how was it paid?',
@@ -84,7 +66,7 @@ const MOCK_DOCUMENTS = [
     fileSize: '4.8 MB',
     ocrSnippet: 'SERVICE AGREEMENT\nEFFECTIVE DATE: 08/01/2026\nTERM: 12 Months\nRATE: $1,800.00 / month\nDEPOSIT: $1,800.00',
     classificationReason: 'Classified as Contract based on formal service terms, monthly rates, and binding references.',
-    vectorEmbeddings: '1024 dims (Qwen3 dense vector)',
+    vectorStatus: 'Indexed & Searchable',
     sampleQuery: 'monthly service fee and deposit terms',
     chatQA: {
       question: 'What is the monthly rate and security deposit for the service agreement?',
@@ -94,7 +76,7 @@ const MOCK_DOCUMENTS = [
   }
 ]
 
-// Mock Semantic Search Queries & Results for interactive showcase
+// Mock Semantic Search Queries & Results matching the exact app UI
 const MOCK_SEMANTIC_QUERIES = [
   {
     query: 'monthly recurring service fee',
@@ -128,7 +110,7 @@ export default function RootPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedMockDoc, setSelectedMockDoc] = useState(MOCK_DOCUMENTS[0])
 
-  // Interactive app preview tabs: dashboard, search, chat, document, folder
+  // Interactive app preview tabs: exactly matches the real app views
   const [mockView, setMockView] = useState<'dashboard' | 'search' | 'chat' | 'folder' | 'document'>('dashboard')
   const [selectedMockFolder, setSelectedMockFolder] = useState('Invoices')
   const [selectedSearchQueryIdx, setSelectedSearchQueryIdx] = useState(0)
@@ -146,27 +128,27 @@ export default function RootPage() {
   const handleTriggerDemo = (doc: typeof MOCK_DOCUMENTS[0]) => {
     setDemoSelectedDoc(doc)
     setDemoStep('uploading')
-    setDemoProgress(15)
+    setDemoProgress(20)
 
     setTimeout(() => {
       setDemoStep('ocr')
-      setDemoProgress(40)
-    }, 1000)
+      setDemoProgress(50)
+    }, 900)
 
     setTimeout(() => {
       setDemoStep('categorizing')
-      setDemoProgress(65)
-    }, 2000)
+      setDemoProgress(75)
+    }, 1800)
 
     setTimeout(() => {
       setDemoStep('embedding')
-      setDemoProgress(85)
-    }, 3000)
+      setDemoProgress(90)
+    }, 2700)
 
     setTimeout(() => {
       setDemoStep('done')
       setDemoProgress(100)
-    }, 4200)
+    }, 3600)
   }
 
   const handleSelectMockChat = (doc: typeof MOCK_DOCUMENTS[0]) => {
@@ -175,7 +157,7 @@ export default function RootPage() {
     setTimeout(() => {
       setActiveChatQA(doc.chatQA)
       setIsTypingChat(false)
-    }, 400)
+    }, 350)
   }
 
   const supabase = createClient()
@@ -200,11 +182,11 @@ export default function RootPage() {
   return (
     <div className="min-h-screen bg-white font-satoshi text-black selection:bg-black selection:text-brand-indigo overflow-x-hidden">
       
-      {/* Navigation Header - Neo-Brutalist Layout using App Indigo */}
+      {/* 1. Navigation Header - Neo-Brutalist Layout using App Indigo */}
       <header className="sticky top-0 z-50 w-full h-20 bg-brand-indigo border-b-2 border-black flex items-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
           
-          {/* Logo - Matches Dashboard Icon Layout */}
+          {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform group-hover:-translate-y-0.5">
               <FileText className="w-5 h-5 text-white" />
@@ -225,7 +207,7 @@ export default function RootPage() {
             </a>
             <a href="#rag-chatbot" className="font-bold text-sm hover:underline underline-offset-4 decoration-2 flex items-center space-x-1.5">
               <Bot className="w-3.5 h-3.5 text-indigo-700" />
-              <span>AI Chatbot</span>
+              <span>AI Assistant</span>
             </a>
             <a href="#how-it-works" className="font-bold text-sm hover:underline underline-offset-4 decoration-2">
               How It Works
@@ -240,11 +222,9 @@ export default function RootPage() {
             {loading ? (
               <div className="w-20 h-8 bg-black/10 animate-pulse rounded-lg" />
             ) : user ? (
-              <>
-                <Link href="/dashboard" className="btn-brutal-secondary text-sm !py-2 !px-4">
-                  Go to Dashboard
-                </Link>
-              </>
+              <Link href="/dashboard" className="btn-brutal-secondary text-sm !py-2 !px-4">
+                Go to Dashboard
+              </Link>
             ) : (
               <>
                 <Link href="/login" className="font-bold text-sm hover:underline">
@@ -292,7 +272,7 @@ export default function RootPage() {
             className="font-bold text-lg border-b border-black/10 pb-2 flex items-center space-x-2"
           >
             <Bot className="w-4 h-4 text-indigo-700" />
-            <span>AI Chatbot</span>
+            <span>AI Assistant</span>
           </a>
           <a 
             href="#how-it-works" 
@@ -339,7 +319,7 @@ export default function RootPage() {
         </div>
       )}
 
-      {/* Hero Section */}
+      {/* 2. Hero Section */}
       <section className="relative w-full bg-brand-indigo bg-dot-pattern border-b-2 border-black py-16 sm:py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
@@ -348,15 +328,15 @@ export default function RootPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center space-x-1.5 bg-white border-2 border-black px-3.5 py-1 rounded-full text-xs sm:text-sm font-bold shadow-hard-sm">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Autonomous Vault</span>
+                <span>Autonomous Document Safe</span>
               </span>
               <span className="inline-flex items-center space-x-1 bg-white border-2 border-black px-3 py-1 rounded-full text-xs sm:text-sm font-bold shadow-hard-sm text-indigo-900">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Vector Semantic Search</span>
+                <span>Semantic Search</span>
               </span>
               <span className="inline-flex items-center space-x-1 bg-white border-2 border-black px-3 py-1 rounded-full text-xs sm:text-sm font-bold shadow-hard-sm text-indigo-900">
                 <Bot className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Grounded RAG Chat</span>
+                <span>Grounded AI Chat</span>
               </span>
             </div>
             
@@ -366,7 +346,7 @@ export default function RootPage() {
             </h1>
 
             <p className="text-lg sm:text-xl font-bold text-black/80 max-w-xl leading-relaxed">
-              Scan, auto-categorize, semantically search every page, and chat directly with your private document vault — backed by verifiable citations and 1024-dimensional vector embeddings.
+              Scan, auto-categorize, semantically search every page, and chat directly with your document vault — backed by verifiable citations and instant vector recall.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
@@ -389,18 +369,18 @@ export default function RootPage() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 pt-4 text-xs sm:text-sm font-bold text-black/80">
-              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Neural OCR & Auto-Filing</span>
-              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Vector pgvector Retrieval</span>
-              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Grounded Q&A with Citations</span>
-              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Zero-Knowledge Private Storage</span>
+              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> OCR &amp; Auto-Categorization</span>
+              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Vector Semantic Search</span>
+              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Grounded Q&amp;A with Citations</span>
+              <span className="flex items-center"><Check className="w-4 h-4 mr-1.5 text-black stroke-[3px]" /> Isolated Private Vaults</span>
             </div>
           </div>
 
-          {/* Right Column: Real Interactive App Preview Mockup */}
+          {/* Right Column: Exact App Preview Mockup */}
           <div className="lg:col-span-6">
             <div className="bg-[#09090b] border-2 border-black rounded-2xl shadow-hard-xl overflow-hidden text-zinc-100 flex flex-col">
               
-              {/* Browser Mockup Header */}
+              {/* Browser Window Header */}
               <div className="bg-zinc-950 text-zinc-400 h-12 flex items-center px-4 justify-between border-b border-zinc-900">
                 <div className="flex items-center space-x-2">
                   <span className="w-3.5 h-3.5 rounded-full bg-[#ff5f57]" />
@@ -410,13 +390,13 @@ export default function RootPage() {
 
                 <div className="text-xs font-mono opacity-80 select-none bg-zinc-900 px-3 py-1 rounded border border-zinc-800/80 hidden sm:block">
                   {mockView === 'dashboard' && 'paperwait.me/dashboard'}
-                  {mockView === 'search' && 'paperwait.me/dashboard?mode=semantic'}
-                  {mockView === 'chat' && 'paperwait.me/dashboard?panel=rag-chat'}
+                  {mockView === 'search' && 'paperwait.me/dashboard?search=active'}
+                  {mockView === 'chat' && 'paperwait.me/dashboard?chat=open'}
                   {mockView === 'folder' && `paperwait.me/dashboard/folder/${selectedMockFolder.toLowerCase()}`}
                   {mockView === 'document' && `paperwait.me/dashboard/document/${selectedMockDoc.id}`}
                 </div>
 
-                {/* Interactive Mode Switcher */}
+                {/* View Switcher */}
                 <div className="flex items-center space-x-1">
                   <button 
                     onClick={() => setMockView('dashboard')}
@@ -463,21 +443,16 @@ export default function RootPage() {
                 </div>
               </div>
 
-              {/* Real App Showcase Body */}
-              <div className="p-4 sm:p-5 min-h-[400px] bg-[#09090b] flex flex-col justify-between">
+              {/* Exact App Body Showcase */}
+              <div className="p-4 sm:p-5 min-h-[400px] bg-[#09090b] flex flex-col justify-between relative">
                 
-                {/* 1. Dashboard View */}
+                {/* 1. Exact Dashboard View */}
                 {mockView === 'dashboard' && (
-                  <div className="space-y-5 animate-fade-in text-left">
+                  <div className="space-y-4 animate-fade-in text-left">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
                       <div>
-                        <div className="text-sm font-extrabold text-white flex items-center space-x-2">
-                          <span>Secure Document Safe</span>
-                          <span className="text-[9px] bg-indigo-950/60 text-indigo-400 border border-indigo-800 px-1.5 py-0.5 rounded font-mono font-bold">
-                            pgvector Ready
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-zinc-500">Autonomous OCR, vector chunking, and folder sorting.</div>
+                        <div className="text-sm font-extrabold text-white">Dashboard</div>
+                        <div className="text-[10px] text-zinc-500">Manage folders and drop files to categorize them automatically.</div>
                       </div>
                       <button className="flex items-center space-x-1 px-2.5 py-1 bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[10px] font-bold rounded-lg shadow-sm">
                         <Plus className="w-3.5 h-3.5" />
@@ -485,7 +460,22 @@ export default function RootPage() {
                       </button>
                     </div>
 
-                    {/* Folders List Row */}
+                    {/* Exact Search Bar with AI Active Toggle */}
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 flex items-center text-xs text-zinc-400">
+                        <Search className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+                        <span>Search documents by name or meaning...</span>
+                      </div>
+                      <button 
+                        onClick={() => setMockView('search')}
+                        className="px-2.5 py-1.5 bg-gradient-to-r from-indigo-600/25 to-violet-600/25 border border-indigo-500/50 rounded-xl text-indigo-300 text-[10px] font-bold flex items-center space-x-1 hover:border-indigo-400 transition-colors cursor-pointer"
+                      >
+                        <Sparkles className="w-3 h-3 text-indigo-400" />
+                        <span>AI Search</span>
+                      </button>
+                    </div>
+
+                    {/* Exact Folders Grid */}
                     <div>
                       <div className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider mb-2">Folders</div>
                       <div className="grid grid-cols-3 gap-2.5">
@@ -515,47 +505,32 @@ export default function RootPage() {
                       </div>
                     </div>
 
-                    {/* Quick AI Shortcuts */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div 
-                        onClick={() => setMockView('search')}
-                        className="p-3 bg-indigo-950/20 border border-indigo-900/40 rounded-xl hover:bg-indigo-950/30 cursor-pointer transition-all flex items-center space-x-2.5"
-                      >
-                        <div className="p-1.5 bg-indigo-900/50 rounded-lg text-indigo-300">
-                          <Sparkles className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-bold text-indigo-200">Semantic Search</div>
-                          <div className="text-[9px] text-zinc-400">Search by concepts & meaning</div>
-                        </div>
-                      </div>
-
-                      <div 
-                        onClick={() => setMockView('chat')}
-                        className="p-3 bg-violet-950/20 border border-violet-900/40 rounded-xl hover:bg-violet-950/30 cursor-pointer transition-all flex items-center space-x-2.5"
-                      >
-                        <div className="p-1.5 bg-violet-900/50 rounded-lg text-violet-300">
-                          <Bot className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-bold text-violet-200">Grounded RAG Chat</div>
-                          <div className="text-[9px] text-zinc-400">Ask questions with citations</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Upload Zone Mockup */}
+                    {/* Upload Zone */}
                     <div className="border border-dashed border-zinc-800 bg-zinc-900/10 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:border-zinc-700 transition-all">
                       <div className="p-1.5 bg-zinc-950 border border-zinc-800 rounded-lg mb-1">
                         <UploadCloud className="w-4 h-4 text-indigo-400" />
                       </div>
-                      <div className="text-[11px] font-bold text-zinc-300">Drag & Drop Documents Here</div>
+                      <div className="text-[11px] font-bold text-zinc-300">Drag &amp; Drop Documents Here</div>
                       <div className="text-[9px] text-zinc-500 mt-0.5">Supports PDF, Images, Word, Excel, CSV, TXT</div>
                     </div>
+
+                    {/* Floating Chat Pill */}
+                    <button 
+                      onClick={() => setMockView('chat')}
+                      className="w-full p-2.5 bg-indigo-950/30 border border-indigo-900/50 rounded-xl flex items-center justify-between text-indigo-200 text-xs font-bold hover:bg-indigo-950/50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Bot className="w-4 h-4 text-indigo-400" />
+                        <span>Open Document Assistant</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-2 py-0.5 rounded-full">
+                        Ready
+                      </span>
+                    </button>
                   </div>
                 )}
 
-                {/* 2. Semantic Search View (NEW) */}
+                {/* 2. Exact Semantic Search View */}
                 {mockView === 'search' && (
                   <div className="space-y-4 animate-fade-in text-left">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
@@ -564,15 +539,15 @@ export default function RootPage() {
                           <Sparkles className="w-4 h-4 text-indigo-400" />
                           <span>Vector Semantic Search</span>
                         </div>
-                        <div className="text-[10px] text-zinc-500">Retrieval powered by 1024-d Cloudflare embeddings & PostgreSQL pgvector</div>
+                        <div className="text-[10px] text-zinc-500">Natural language search across document contents and concepts</div>
                       </div>
-                      <span className="text-[9px] bg-indigo-950/50 text-indigo-300 border border-indigo-800/80 px-2 py-0.5 rounded-full font-bold flex items-center space-x-1">
+                      <span className="text-[9px] bg-indigo-950/60 text-indigo-300 border border-indigo-800/80 px-2 py-0.5 rounded-full font-bold flex items-center space-x-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                         <span>AI Search Active</span>
                       </span>
                     </div>
 
-                    {/* Search Input Bar with Toggle */}
+                    {/* Exact Search Bar */}
                     <div className="relative flex items-center">
                       <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3" />
                       <div className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-24 py-2 text-xs font-medium text-zinc-200">
@@ -580,13 +555,13 @@ export default function RootPage() {
                       </div>
                       <div className="absolute right-1.5 flex items-center space-x-1 px-2 py-0.5 bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-lg text-[9px] font-bold">
                         <Sparkles className="w-3 h-3" />
-                        <span>1024-d</span>
+                        <span>Semantic</span>
                       </div>
                     </div>
 
-                    {/* Sample Query Chips */}
+                    {/* Sample Query Suggestions */}
                     <div>
-                      <div className="text-[9px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Try Sample Vector Queries</div>
+                      <div className="text-[9px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Try Suggested Queries</div>
                       <div className="flex flex-wrap gap-1.5">
                         {MOCK_SEMANTIC_QUERIES.map((item, idx) => (
                           <button
@@ -604,7 +579,7 @@ export default function RootPage() {
                       </div>
                     </div>
 
-                    {/* Semantic Match Result Card */}
+                    {/* Semantic Match Result Card with Highlighted Terms */}
                     <div className="p-3 bg-zinc-900/40 border border-indigo-900/40 rounded-xl space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
@@ -619,13 +594,12 @@ export default function RootPage() {
                         </span>
                       </div>
 
-                      {/* Snippet with Highlighted Terms */}
                       <p className="text-[11px] text-zinc-300 leading-relaxed bg-zinc-950/80 p-2.5 rounded-lg border border-zinc-850 font-mono">
                         {activeSemanticQuery.snippet.split(' ').map((word, i) => {
                           const clean = word.toLowerCase().replace(/[^a-z0-9]/g, '')
                           const isMatch = activeSemanticQuery.matchedTerms.includes(clean)
                           return isMatch ? (
-                            <mark key={i} className="bg-indigo-500/30 text-indigo-200 px-1 py-0.5 rounded font-bold border border-indigo-500/40 mx-0.5">
+                            <mark key={i} className="bg-indigo-500/25 text-indigo-300 px-1 py-0.5 rounded font-medium border border-indigo-500/30 mx-0.5">
                               {word}{' '}
                             </mark>
                           ) : (
@@ -637,7 +611,7 @@ export default function RootPage() {
                   </div>
                 )}
 
-                {/* 3. Grounded RAG Chat View (NEW) */}
+                {/* 3. Exact Document Chat View */}
                 {mockView === 'chat' && (
                   <div className="space-y-4 animate-fade-in text-left">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
@@ -646,25 +620,23 @@ export default function RootPage() {
                           <Bot className="w-3.5 h-3.5 text-white" />
                         </div>
                         <div>
-                          <div className="text-xs font-extrabold text-white">PaperWait Grounded Assistant</div>
-                          <div className="text-[9px] text-zinc-500">Strictly grounded in your documents • Zero hallucinations</div>
+                          <div className="text-xs font-extrabold text-white">Document Assistant</div>
+                          <div className="text-[9px] text-zinc-500">Ask questions grounded in your private vault</div>
                         </div>
                       </div>
-                      <span className="text-[9px] bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded font-mono font-bold">
-                        Groq 120B Fast
+                      <span className="text-[9px] bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded font-bold">
+                        100% Grounded
                       </span>
                     </div>
 
-                    {/* Simulated Conversation Bubble */}
+                    {/* Conversation Bubble */}
                     <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-                      {/* User message */}
                       <div className="flex justify-end">
                         <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-2xl rounded-tr-sm text-xs max-w-[85%] font-medium">
                           {activeChatQA.question}
                         </div>
                       </div>
 
-                      {/* Assistant response */}
                       <div className="flex items-start space-x-2">
                         <div className="w-5 h-5 rounded-md bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Bot className="w-3 h-3 text-indigo-400" />
@@ -673,7 +645,7 @@ export default function RootPage() {
                           {isTypingChat ? (
                             <div className="flex items-center space-x-2 text-zinc-400">
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                              <span className="text-[10px]">Retrieving chunks & generating grounded answer...</span>
+                              <span className="text-[10px]">Retrieving context and preparing answer...</span>
                             </div>
                           ) : (
                             <>
@@ -694,7 +666,7 @@ export default function RootPage() {
 
                     {/* Question Preset Chips */}
                     <div>
-                      <div className="text-[9px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Ask Document Questions</div>
+                      <div className="text-[9px] font-bold uppercase text-zinc-500 tracking-wider mb-1.5">Preset Document Questions</div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                         {MOCK_DOCUMENTS.map((doc) => (
                           <button
@@ -715,7 +687,7 @@ export default function RootPage() {
                   </div>
                 )}
 
-                {/* 4. Folder View */}
+                {/* 4. Exact Folder View */}
                 {mockView === 'folder' && (
                   <div className="space-y-4 animate-fade-in text-left">
                     <div className="flex items-center space-x-3 border-b border-zinc-900 pb-3">
@@ -750,11 +722,11 @@ export default function RootPage() {
                             </div>
                             <div className="min-w-0">
                               <div className="text-[11px] font-bold text-zinc-200 truncate group-hover:text-white">{doc.fileName}</div>
-                              <div className="text-[9px] text-zinc-500 mt-0.5">Size: {doc.fileSize} • 1024-d Indexed</div>
+                              <div className="text-[9px] text-zinc-500 mt-0.5">Size: {doc.fileSize} • Auto-classified</div>
                             </div>
                           </div>
                           <span className="text-[9px] bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 px-2 py-0.5 rounded-full font-bold">
-                            Indexed
+                            Ready
                           </span>
                         </div>
                       ))}
@@ -762,7 +734,7 @@ export default function RootPage() {
                   </div>
                 )}
 
-                {/* 5. Document Details View */}
+                {/* 5. Exact Document Details View */}
                 {mockView === 'document' && (
                   <div className="space-y-4 animate-fade-in text-left">
                     <div className="flex items-center space-x-3 border-b border-zinc-900 pb-3">
@@ -788,7 +760,7 @@ export default function RootPage() {
                       </div>
                       <div className="bg-zinc-900/40 border border-zinc-850 p-2.5 rounded-xl text-[10px]">
                         <div className="text-zinc-500">Vector Status</div>
-                        <div className="text-indigo-300 font-bold mt-1 uppercase">{selectedMockDoc.vectorEmbeddings}</div>
+                        <div className="text-emerald-400 font-bold mt-1 uppercase">{selectedMockDoc.vectorStatus}</div>
                       </div>
                     </div>
 
@@ -801,11 +773,11 @@ export default function RootPage() {
                   </div>
                 )}
 
-                {/* Simulated App Footer Bar */}
+                {/* Footer Bar */}
                 <div className="border-t border-zinc-900 pt-3 flex justify-between items-center text-[10px] text-zinc-500 font-medium">
                   <div className="flex items-center space-x-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Live Interactive Demo</span>
+                    <span>Exact App Interface</span>
                   </div>
                   <button 
                     onClick={() => {
@@ -828,24 +800,23 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Social Proof Marquee */}
+      {/* 3. Product Benefits Marquee */}
       <section className="bg-brand-charcoal border-b-2 border-black py-4 overflow-hidden relative">
         <div className="animate-marquee whitespace-nowrap flex items-center text-brand-indigo font-cabinet font-extrabold uppercase text-lg sm:text-xl tracking-wider select-none">
           {Array(3).fill(
             <>
               <span className="mx-8 flex items-center"><Zap className="w-5 h-5 text-indigo-400 fill-indigo-400 mr-2" /> OCR Digitization</span>
-              <span className="mx-8 flex items-center"><Zap className="w-5 h-5 text-indigo-400 fill-indigo-400 mr-2" /> Neural Auto-Categorization</span>
+              <span className="mx-8 flex items-center"><Zap className="w-5 h-5 text-indigo-400 fill-indigo-400 mr-2" /> Autonomous Categorization</span>
               <span className="mx-8 flex items-center"><Sparkles className="w-5 h-5 text-indigo-400 mr-2" /> Vector Semantic Search</span>
-              <span className="mx-8 flex items-center"><Bot className="w-5 h-5 text-indigo-400 mr-2" /> Grounded RAG Chatbot</span>
-              <span className="mx-8 flex items-center"><Database className="w-5 h-5 text-indigo-400 mr-2" /> 1024-d pgvector Embeddings</span>
+              <span className="mx-8 flex items-center"><Bot className="w-5 h-5 text-indigo-400 mr-2" /> Grounded AI Assistant</span>
               <span className="mx-8 flex items-center"><CheckCircle2 className="w-5 h-5 text-indigo-400 mr-2" /> Verified Page Citations</span>
-              <span className="mx-8 flex items-center"><ShieldCheck className="w-5 h-5 text-indigo-400 mr-2" /> Zero-Knowledge RLS Vault</span>
+              <span className="mx-8 flex items-center"><ShieldCheck className="w-5 h-5 text-indigo-400 mr-2" /> Isolated Encrypted Vault</span>
             </>
           )}
         </div>
       </section>
 
-      {/* Problem vs Solution Section */}
+      {/* 4. Problem vs Solution Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <h2 className="text-3xl sm:text-4xl font-cabinet font-extrabold tracking-tight mb-4">
@@ -861,10 +832,10 @@ export default function RootPage() {
           <div className="bg-[#f4f4f5] border-2 border-dashed border-gray-400 opacity-80 rounded-3xl p-8 sm:p-10 flex flex-col justify-between">
             <div>
               <span className="inline-block bg-white text-gray-500 border border-gray-300 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wide mb-6">
-                Manual Chaos & Keyword Blindness
+                Manual Filing &amp; Keyword Blindness
               </span>
               <h3 className="text-2xl font-cabinet font-extrabold mb-6">
-                Hours Wasted Searching & Calculating
+                Hours Wasted Searching &amp; Calculating
               </h3>
               <ul className="space-y-4">
                 {[
@@ -889,17 +860,17 @@ export default function RootPage() {
           <div className="bg-brand-indigo border-2 border-black rounded-3xl p-8 sm:p-10 shadow-hard-lg flex flex-col justify-between">
             <div>
               <span className="inline-block bg-white text-black border-2 border-black font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wide mb-6">
-                The PaperWait Architecture
+                The PaperWait Solution
               </span>
               <h3 className="text-2xl font-cabinet font-extrabold mb-6">
-                Autonomous Filing, Vector Search & RAG Chat
+                Autonomous Filing, Vector Search &amp; Grounded Chat
               </h3>
               <ul className="space-y-4">
                 {[
                   'Drop PDFs, images, Office files, or scans — OCR digitizes text automatically.',
-                  'Neural classifier auto-assigns files into structured directories.',
-                  'Vector Semantic Search retrieves concepts using 1024-d pgvector cosine similarity.',
-                  'RAG AI Assistant answers document queries with exact page citations and tables.'
+                  'Neural classification auto-assigns files into structured directories.',
+                  'Vector Semantic Search retrieves concepts using high-precision embedding similarity.',
+                  'Grounded AI Assistant answers document queries with exact page citations and tables.'
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start">
                     <Check className="w-5 h-5 text-black stroke-[3px] mr-3 mt-1 flex-shrink-0" />
@@ -915,7 +886,7 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Feature Grid Section (Core Capabilities) */}
+      {/* 5. Core Capabilities Grid (6 Features) */}
       <section id="features" className="bg-brand-indigo border-t-2 border-b-2 border-black py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           
@@ -931,7 +902,6 @@ export default function RootPage() {
             </p>
           </div>
 
-          {/* 6 Feature Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             
             {/* Feature 1 */}
@@ -940,7 +910,7 @@ export default function RootPage() {
                 <UploadCloud className="w-6 h-6 text-black" />
               </div>
               <h3 className="text-xl font-cabinet font-extrabold mb-3">
-                OCR Digitization & Text Parsing
+                OCR Digitization &amp; Text Parsing
               </h3>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
                 Extract readable text from multi-page PDFs, mobile camera scans, Word docs, Excel spreadsheets, PPTX slides, CSVs, and TXT files with layout preservation.
@@ -956,11 +926,11 @@ export default function RootPage() {
                 Autonomous Categorization
               </h3>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
-                Ensembled AI models route invoices, receipts, and contracts to dedicated directories with intelligent folder auto-creation and Levenshtein matching.
+                Intelligent models automatically route invoices, receipts, and contracts to dedicated directories with smart folder auto-creation.
               </p>
             </div>
 
-            {/* Feature 3 (NEW: Vector Semantic Search) */}
+            {/* Feature 3 */}
             <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-hard-sm hover:translate-y-[-4px] hover:shadow-hard-lg transition-all group">
               <div className="w-12 h-12 bg-brand-sage border-2 border-black rounded-lg flex items-center justify-center mb-6 group-hover:bg-brand-indigo transition-colors">
                 <Sparkles className="w-6 h-6 text-black" />
@@ -974,35 +944,35 @@ export default function RootPage() {
                 </span>
               </div>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
-                Search by concept, intent, or fuzzy recall. Powered by 1024-dimensional Cloudflare embeddings and PostgreSQL pgvector HNSW cosine similarity.
+                Search by concept, intent, or fuzzy recall. High-precision vector embeddings understand meaning and context across every document page.
               </p>
             </div>
 
-            {/* Feature 4 (NEW: Grounded RAG Chatbot) */}
+            {/* Feature 4 */}
             <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-hard-sm hover:translate-y-[-4px] hover:shadow-hard-lg transition-all group">
               <div className="w-12 h-12 bg-brand-sage border-2 border-black rounded-lg flex items-center justify-center mb-6 group-hover:bg-brand-indigo transition-colors">
                 <Bot className="w-6 h-6 text-black" />
               </div>
               <div className="flex items-center space-x-2 mb-3">
                 <h3 className="text-xl font-cabinet font-extrabold">
-                  Grounded RAG Chatbot
+                  Grounded AI Assistant
                 </h3>
                 <span className="text-[10px] bg-indigo-100 text-indigo-900 font-extrabold px-2 py-0.5 rounded-full border border-indigo-400">
                   NEW
                 </span>
               </div>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
-                Ask conversational questions directly to your document vault. Strict anti-hallucination guardrails via Groq 120B with automated Cloudflare fallback.
+                Ask conversational questions directly to your document vault with strict anti-hallucination guardrails and instant answers.
               </p>
             </div>
 
-            {/* Feature 5 (NEW: Verified Citations) */}
+            {/* Feature 5 */}
             <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-hard-sm hover:translate-y-[-4px] hover:shadow-hard-lg transition-all group">
               <div className="w-12 h-12 bg-brand-sage border-2 border-black rounded-lg flex items-center justify-center mb-6 group-hover:bg-brand-indigo transition-colors">
                 <FileSearch className="w-6 h-6 text-black" />
               </div>
               <h3 className="text-xl font-cabinet font-extrabold mb-3">
-                Verified Citations & Tables
+                Verified Citations &amp; Tables
               </h3>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
                 Every AI answer features source provenance with document names and page numbers (e.g., &ldquo;From invoice_2026.pdf, Page 2&rdquo;) and clean financial tables.
@@ -1015,10 +985,10 @@ export default function RootPage() {
                 <ShieldCheck className="w-6 h-6 text-black" />
               </div>
               <h3 className="text-xl font-cabinet font-extrabold mb-3">
-                Zero-Knowledge Privacy & RLS
+                Private Vault &amp; Row Security
               </h3>
               <p className="text-sm font-bold text-black/70 leading-relaxed">
-                Row Level Security across all tables (documents, chunks, chat messages) and isolated Supabase storage buckets prevent cross-tenant data leakage.
+                Row Level Security across all tables and isolated private storage buckets ensure your documents remain completely private and protected.
               </p>
             </div>
 
@@ -1027,14 +997,14 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Feature Deep Dive: Semantic Search Spotlight */}
+      {/* 6. Feature Deep Dive: Semantic Search Spotlight */}
       <section id="semantic-search" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b-2 border-black">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           <div className="lg:col-span-6 space-y-6">
             <span className="bg-brand-indigo border-2 border-black px-3.5 py-1 rounded-full text-xs uppercase font-bold tracking-wider shadow-hard-sm inline-flex items-center space-x-1.5">
               <Sparkles className="w-3.5 h-3.5 text-indigo-800" />
-              <span>Next-Gen Retrieval</span>
+              <span>Semantic Retrieval</span>
             </span>
 
             <h2 className="text-3xl sm:text-4xl font-cabinet font-extrabold tracking-tight">
@@ -1042,7 +1012,7 @@ export default function RootPage() {
             </h2>
 
             <p className="text-base sm:text-lg font-bold text-black/80 leading-relaxed">
-              Traditional search breaks when you don&apos;t know the exact keyword. PaperWait computes 1024-dimensional dense vector embeddings for every document chunk using Cloudflare Workers AI.
+              Traditional search breaks when you don&apos;t know the exact keyword. PaperWait computes high-precision vector embeddings for every document chunk to match concepts and intent.
             </p>
 
             <div className="space-y-4">
@@ -1065,10 +1035,10 @@ export default function RootPage() {
 
             <div className="flex flex-wrap gap-3 pt-2">
               <div className="bg-white border-2 border-black px-3 py-1.5 rounded-lg text-xs font-bold">
-                ⚡ Sub-millisecond pgvector HNSW
+                ⚡ Sub-Second Retrieval
               </div>
               <div className="bg-white border-2 border-black px-3 py-1.5 rounded-lg text-xs font-bold">
-                🎯 Dynamic Score Floor &amp; Keyword Boost
+                🎯 Dynamic Keyword &amp; Concept Boosting
               </div>
             </div>
           </div>
@@ -1080,7 +1050,7 @@ export default function RootPage() {
                 <span className="font-cabinet font-extrabold text-base">Semantic Search Preview</span>
               </div>
               <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-2.5 py-0.5 rounded-full font-mono font-bold">
-                pgvector cosine
+                Vector Match
               </span>
             </div>
 
@@ -1099,7 +1069,7 @@ export default function RootPage() {
                     <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.25 rounded font-mono font-bold">97% Match</span>
                   </div>
                   <p className="text-[11px] text-zinc-300 font-mono">
-                    ... TERM: 12 Months ... RATE: <mark className="bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-bold">$1,800.00 / month</mark> ... DEPOSIT: $1,800.00 ...
+                    ... TERM: 12 Months ... RATE: <mark className="bg-indigo-500/25 text-indigo-300 px-1 py-0.5 rounded font-medium border border-indigo-500/30">$1,800.00 / month</mark> ... DEPOSIT: $1,800.00 ...
                   </p>
                 </div>
 
@@ -1109,7 +1079,7 @@ export default function RootPage() {
                     <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.25 rounded font-mono font-bold">91% Match</span>
                   </div>
                   <p className="text-[11px] text-zinc-300 font-mono">
-                    ... INVOICE NUMBER: 10485 ... <mark className="bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-bold">Services Rendered - $148.20</mark> ...
+                    ... INVOICE NUMBER: 10485 ... <mark className="bg-indigo-500/25 text-indigo-300 px-1 py-0.5 rounded font-medium border border-indigo-500/30">Services Rendered - $148.20</mark> ...
                   </p>
                 </div>
               </div>
@@ -1119,7 +1089,7 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Feature Deep Dive: Grounded RAG Chatbot Spotlight */}
+      {/* 7. Feature Deep Dive: Grounded RAG Chatbot Spotlight */}
       <section id="rag-chatbot" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b-2 border-black">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
@@ -1127,7 +1097,7 @@ export default function RootPage() {
             <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
               <div className="flex items-center space-x-2">
                 <Bot className="w-5 h-5 text-indigo-400" />
-                <span className="font-cabinet font-extrabold text-base">Grounded RAG Assistant</span>
+                <span className="font-cabinet font-extrabold text-base">Grounded AI Assistant</span>
               </div>
               <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-0.5 rounded-full font-mono font-bold">
                 Anti-Hallucination Active
@@ -1135,13 +1105,11 @@ export default function RootPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Question */}
               <div className="p-3 bg-indigo-950/40 border border-indigo-900/60 rounded-xl">
                 <div className="text-[10px] text-indigo-300 font-bold mb-0.5">User Prompt</div>
                 <div className="text-xs text-white font-medium">&ldquo;What is my total spending on retail receipts and invoices this month?&rdquo;</div>
               </div>
 
-              {/* Response */}
               <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-3">
                 <div className="text-xs text-zinc-200 leading-relaxed">
                   Based on your uploaded documents, here is the itemized summary:
@@ -1205,7 +1173,7 @@ export default function RootPage() {
               {[
                 'Verifiable citations: click any citation pill to verify the source document & page.',
                 'Structured synthesis: extracts comparison tables, totals, and bulleted takeaways.',
-                'Ultra-fast primary inference via Groq 120B with seamless Cloudflare fallback.',
+                'High-speed conversational inference with automatic multi-tiered failover.',
                 'Persistent chat history synchronized across devices and protected by Row Level Security.'
               ].map((item, idx) => (
                 <li key={idx} className="flex items-start">
@@ -1219,7 +1187,76 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Interactive Sandbox Ingestion Demo Section */}
+      {/* 8. How It Works Section (4 Steps in Proper Sequence) */}
+      <section id="how-it-works" className="bg-brand-charcoal text-white py-20 px-4 sm:px-6 lg:px-8 border-b-2 border-black">
+        <div className="max-w-7xl mx-auto">
+          
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="bg-brand-charcoal border-2 border-white/20 text-brand-indigo px-3.5 py-1 rounded-full text-xs uppercase font-bold tracking-wider">
+              Workflow Steps
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-cabinet font-extrabold tracking-tight mt-6 mb-4 text-white">
+              How PaperWait Operates
+            </h2>
+            <p className="text-lg font-bold text-white/70">
+              Four seamless operations from document upload to instant, cited answers.
+            </p>
+          </div>
+
+          <div className="relative">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative z-10">
+              
+              {/* Step 1 */}
+              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-brand-sage transition-colors">
+                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-brand-sage flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(183,198,194,0.4)]">
+                  1
+                </div>
+                <h3 className="text-xl font-cabinet font-extrabold">Snap &amp; Upload</h3>
+                <p className="text-sm text-white/70 leading-relaxed font-bold">
+                  Capture receipts with your phone, import bills, or drag &amp; drop PDFs, Word files, and spreadsheets into the browser vault.
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-brand-indigo transition-colors">
+                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-brand-indigo flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(199,210,254,0.4)]">
+                  2
+                </div>
+                <h3 className="text-xl font-cabinet font-extrabold">OCR &amp; Auto-Sort</h3>
+                <p className="text-sm text-white/70 leading-relaxed font-bold">
+                  OCR extracts layout strings across every page. Neural models automatically classify and file documents into smart directories.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-white transition-colors">
+                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-white flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+                  3
+                </div>
+                <h3 className="text-xl font-cabinet font-extrabold">Embed &amp; Index</h3>
+                <p className="text-sm text-white/70 leading-relaxed font-bold">
+                  Text is split into boundary-aware chunks and indexed into high-speed vector embeddings for concept-based semantic recall.
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-indigo-400 transition-colors">
+                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-indigo-400 flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                  4
+                </div>
+                <h3 className="text-xl font-cabinet font-extrabold">Search &amp; Chat</h3>
+                <p className="text-sm text-white/70 leading-relaxed font-bold">
+                  Retrieve files by concept via vector semantic search, or chat with the assistant to get cited answers, tables, and summaries.
+                </p>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* 9. Interactive Sandbox Ingestion Simulator (Clean, Professional, Non-Sensitive) */}
       <section className="bg-white py-16 px-4 sm:px-6 lg:px-8 border-b-2 border-black">
         <div className="max-w-7xl mx-auto">
           <div className="max-w-2xl mb-12">
@@ -1227,15 +1264,15 @@ export default function RootPage() {
               Interactive Sandbox
             </span>
             <h2 className="text-3xl sm:text-4xl font-cabinet font-extrabold tracking-tight mt-6 mb-4">
-              Try the End-to-End Ingestion Pipeline
+              Try the Document Ingestion Pipeline
             </h2>
             <p className="text-lg font-bold text-black/70">
-              Select one of the sample document types below to watch the upload, OCR text extraction, neural categorization, and 1024-d vector indexing in action.
+              Select one of the sample document types below to watch the upload, OCR text extraction, folder filing, and vector indexing in action.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-            {/* Left: Input Selection & Ingest status */}
+            {/* Left: Input Selection */}
             <div className="lg:col-span-5 bg-brand-indigo border-2 border-black p-6 sm:p-8 rounded-2xl shadow-hard-lg flex flex-col justify-between">
               <div className="space-y-6">
                 <div>
@@ -1243,7 +1280,7 @@ export default function RootPage() {
                     1. Choose a File Template
                   </h3>
                   <p className="text-xs text-black/70 font-bold">
-                    Select a document to process through our autonomous AI pipeline.
+                    Select a document to process through the pipeline.
                   </p>
                 </div>
 
@@ -1294,8 +1331,8 @@ export default function RootPage() {
                     {/* Step log list */}
                     <div className="space-y-2 text-xs font-bold text-left">
                       <div className="flex items-center space-x-2">
-                        {demoProgress >= 15 ? (
-                          demoProgress > 15 ? (
+                        {demoProgress >= 20 ? (
+                          demoProgress > 20 ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           ) : (
                             <Loader2 className="w-4 h-4 animate-spin text-black" />
@@ -1303,12 +1340,12 @@ export default function RootPage() {
                         ) : (
                           <div className="w-4 h-4 border border-black/40 rounded-full" />
                         )}
-                        <span className={demoProgress >= 15 ? 'text-black' : 'text-black/45'}>Uploading encrypted file payload</span>
+                        <span className={demoProgress >= 20 ? 'text-black' : 'text-black/45'}>Secure Ingress &amp; Staging</span>
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        {demoProgress >= 40 ? (
-                          demoProgress > 40 ? (
+                        {demoProgress >= 50 ? (
+                          demoProgress > 50 ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           ) : (
                             <Loader2 className="w-4 h-4 animate-spin text-black" />
@@ -1316,12 +1353,12 @@ export default function RootPage() {
                         ) : (
                           <div className="w-4 h-4 border border-black/40 rounded-full" />
                         )}
-                        <span className={demoProgress >= 40 ? 'text-black' : 'text-black/45'}>OCR Digitization & Text Parsing</span>
+                        <span className={demoProgress >= 50 ? 'text-black' : 'text-black/45'}>OCR Digitization &amp; Text Extraction</span>
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        {demoProgress >= 65 ? (
-                          demoProgress > 65 ? (
+                        {demoProgress >= 75 ? (
+                          demoProgress > 75 ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           ) : (
                             <Loader2 className="w-4 h-4 animate-spin text-black" />
@@ -1329,11 +1366,11 @@ export default function RootPage() {
                         ) : (
                           <div className="w-4 h-4 border border-black/40 rounded-full" />
                         )}
-                        <span className={demoProgress >= 65 ? 'text-black' : 'text-black/45'}>Neural Category & Folder Assignment</span>
+                        <span className={demoProgress >= 75 ? 'text-black' : 'text-black/45'}>Folder Classification &amp; Routing</span>
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        {demoProgress >= 85 ? (
+                        {demoProgress >= 90 ? (
                           demoProgress >= 100 ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           ) : (
@@ -1342,7 +1379,7 @@ export default function RootPage() {
                         ) : (
                           <div className="w-4 h-4 border border-black/40 rounded-full" />
                         )}
-                        <span className={demoProgress >= 85 ? 'text-black' : 'text-black/45'}>1024-d Vector Embeddings & pgvector Index</span>
+                        <span className={demoProgress >= 90 ? 'text-black' : 'text-black/45'}>Vector Embeddings &amp; Semantic Indexing</span>
                       </div>
                     </div>
                   </div>
@@ -1364,25 +1401,25 @@ export default function RootPage() {
               )}
             </div>
 
-            {/* Right: AI Ingestion Output Console */}
+            {/* Right: Clean Ingestion Monitor */}
             <div className="lg:col-span-7 bg-brand-charcoal text-white rounded-2xl border-2 border-black shadow-hard-lg overflow-hidden flex flex-col justify-between min-h-[400px]">
-              {/* Console Header */}
+              {/* Header */}
               <div className="bg-[#0e1310] border-b border-white/5 px-6 py-4 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2">
                   <span className={`w-2 h-2 rounded-full ${demoStep === 'done' ? 'bg-emerald-500' : demoStep === 'idle' ? 'bg-zinc-650' : 'bg-amber-500 animate-pulse'}`} />
-                  <span className="font-mono text-zinc-400 font-bold">PaperWait Autonomous Pipeline</span>
+                  <span className="font-mono text-zinc-400 font-bold">PaperWait Ingestion Monitor</span>
                 </div>
                 <span className="font-mono opacity-60">Status: {demoStep.toUpperCase()}</span>
               </div>
 
-              {/* Console Body */}
+              {/* Body */}
               <div className="flex-1 p-6 flex flex-col justify-center text-left">
                 {demoStep === 'idle' && (
                   <div className="text-center max-w-sm mx-auto space-y-4">
                     <UploadCloud className="w-12 h-12 text-zinc-700 mx-auto opacity-50" />
-                    <h4 className="font-cabinet font-extrabold text-lg text-zinc-350">Awaiting file input...</h4>
+                    <h4 className="font-cabinet font-extrabold text-lg text-zinc-350">Awaiting file selection...</h4>
                     <p className="text-xs text-zinc-500 font-medium leading-relaxed">
-                      Select one of the three sample document buttons on the left to watch how they are parsed, categorized, vector-embedded, and prepared for RAG chat.
+                      Select one of the sample document templates on the left to watch how they are securely uploaded, OCR-digitized, categorized, and indexed for semantic search and Q&amp;A.
                     </p>
                   </div>
                 )}
@@ -1390,19 +1427,19 @@ export default function RootPage() {
                 {demoStep === 'uploading' && (
                   <div className="text-center max-w-sm mx-auto space-y-3">
                     <Loader2 className="w-8 h-8 animate-spin text-brand-indigo mx-auto" />
-                    <h4 className="font-cabinet font-extrabold text-sm text-zinc-200 uppercase tracking-widest">Ingesting payload...</h4>
-                    <p className="text-xs text-zinc-550 font-mono">
-                      POST /api/upload/secure-ingress?name={demoSelectedDoc?.fileName}
+                    <h4 className="font-cabinet font-extrabold text-sm text-zinc-200 uppercase tracking-widest">Staging Document...</h4>
+                    <p className="text-xs text-zinc-500 font-mono">
+                      Staging {demoSelectedDoc?.fileName} to private vault storage
                     </p>
                   </div>
                 )}
 
                 {demoStep === 'ocr' && (
                   <div className="space-y-4 font-mono text-xs text-left">
-                    <div className="text-brand-indigo font-bold">{`>>> STARTING OPTICAL CHARACTER RECOGNITION (OCR)...`}</div>
+                    <div className="text-brand-indigo font-bold">{`>>> PERFORMING TEXT DIGITIZATION (OCR)...`}</div>
                     <div className="text-zinc-500 text-[10px] leading-relaxed">
-                      Scanning pixels for text blocks...<br />
-                      Detected text grids. Executing layout analyzer models...
+                      Scanning document layout...<br />
+                      Preserving multi-page text and headers...
                     </div>
                     <div className="bg-white/5 border border-white/10 p-3 rounded text-[11px] font-mono animate-pulse">
                       {demoSelectedDoc?.ocrSnippet.split('\n')[0]}...
@@ -1412,27 +1449,27 @@ export default function RootPage() {
 
                 {demoStep === 'categorizing' && (
                   <div className="space-y-4 font-mono text-xs text-left">
-                    <div className="text-brand-indigo font-bold">{`>>> RECOGNIZED OCR STRINGS COMPLETE.`}</div>
+                    <div className="text-brand-indigo font-bold">{`>>> OCR EXTRACTION COMPLETE.`}</div>
                     <div className="text-zinc-500 text-[10px] leading-relaxed">
-                      Extracting metadata...<br />
-                      Running Neural classifier for category determination...
+                      Analyzing document semantics and headers...<br />
+                      Determining destination directory...
                     </div>
                     <div className="bg-white/5 border border-white/10 p-3 rounded text-[11px] font-bold text-amber-400">
-                      Target Folder: {demoSelectedDoc?.folder} (Confidence: 98.4%)
+                      Destination Folder: {demoSelectedDoc?.folder}
                     </div>
                   </div>
                 )}
 
                 {demoStep === 'embedding' && (
                   <div className="space-y-4 font-mono text-xs text-left">
-                    <div className="text-brand-indigo font-bold">{`>>> GENERATING VECTOR EMBEDDINGS (1024-D)...`}</div>
+                    <div className="text-brand-indigo font-bold">{`>>> GENERATING VECTOR EMBEDDINGS...`}</div>
                     <div className="text-zinc-500 text-[10px] leading-relaxed">
-                      Boundary-aware chunking executed (500-token chunks with overlap)...<br />
-                      Calling Cloudflare Workers AI @cf/qwen/qwen3-embedding-0.6b...<br />
-                      Upserting dense vector to Supabase pgvector HNSW index...
+                      Creating boundary-aware text chunks...<br />
+                      Computing high-dimensional vector embeddings...<br />
+                      Storing embeddings in document vector index...
                     </div>
                     <div className="bg-white/5 border border-white/10 p-3 rounded text-[11px] font-bold text-indigo-400">
-                      ⚡ 1024-dimensional embedding generated &amp; indexed
+                      ⚡ Vector embeddings generated &amp; indexed
                     </div>
                   </div>
                 )}
@@ -1441,29 +1478,29 @@ export default function RootPage() {
                   <div className="space-y-4 animate-fade-in text-left">
                     {/* Header */}
                     <div className="flex items-center justify-between text-xs border-b border-white/10 pb-3">
-                      <span className="text-zinc-400 font-bold font-mono">Processed Output</span>
+                      <span className="text-zinc-400 font-bold font-mono">Ingestion Complete</span>
                       <div className="flex items-center space-x-2">
                         <span className="bg-brand-indigo text-black font-extrabold border border-black px-2.5 py-0.5 rounded text-[10px] uppercase font-mono">
                           📁 {demoSelectedDoc.folder}
                         </span>
                         <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] uppercase font-mono font-bold">
-                          RAG Ready
+                          Ready
                         </span>
                       </div>
                     </div>
 
                     {/* OCR Snippet block */}
                     <div className="space-y-1.5">
-                      <div className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase font-mono">EXTRACTED OCR TEXT</div>
+                      <div className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase font-mono">EXTRACTED TEXT PREVIEW</div>
                       <pre className="bg-[#0e1310] border border-white/5 text-zinc-200 p-3 rounded-xl font-mono text-[10px] max-h-20 overflow-y-auto whitespace-pre-wrap leading-relaxed">
                         {demoSelectedDoc.ocrSnippet}
                       </pre>
                     </div>
 
-                    {/* Vector status & AI Reasoning block */}
+                    {/* Status blocks */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
-                        <div className="text-[10px] font-bold text-brand-indigo tracking-wider uppercase font-mono mb-1">AI Classification</div>
+                        <div className="text-[10px] font-bold text-brand-indigo tracking-wider uppercase font-mono mb-1">Categorization</div>
                         <p className="text-[11px] text-zinc-300 leading-relaxed font-bold">
                           {demoSelectedDoc.classificationReason}
                         </p>
@@ -1471,7 +1508,7 @@ export default function RootPage() {
                       <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
                         <div className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase font-mono mb-1">Vector Index Status</div>
                         <p className="text-[11px] text-zinc-300 leading-relaxed font-bold">
-                          {demoSelectedDoc.vectorEmbeddings} indexed in pgvector HNSW. Ready for Semantic Search &amp; RAG Chatbot.
+                          Document chunks indexed. Ready for Semantic Search &amp; Grounded Chat.
                         </p>
                       </div>
                     </div>
@@ -1479,86 +1516,17 @@ export default function RootPage() {
                 )}
               </div>
 
-              {/* Console Footer */}
+              {/* Footer */}
               <div className="bg-[#0e1310] border-t border-white/5 px-6 py-3 text-[10px] text-zinc-500 flex justify-between font-mono font-medium select-none">
-                <span>Architecture: Next.js + pgvector + Groq + Cloudflare</span>
-                <span>© PaperWait Engine</span>
+                <span>Vault Security: Encrypted</span>
+                <span>PaperWait Engine</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works Section (4 Steps) */}
-      <section id="how-it-works" className="bg-brand-charcoal text-white py-20 px-4 sm:px-6 lg:px-8 border-b-2 border-black">
-        <div className="max-w-7xl mx-auto">
-          
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <span className="bg-brand-charcoal border-2 border-white/20 text-brand-indigo px-3.5 py-1 rounded-full text-xs uppercase font-bold tracking-wider">
-              Workflow Steps
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-cabinet font-extrabold tracking-tight mt-6 mb-4 text-white">
-              How PaperWait Operates
-            </h2>
-            <p className="text-lg font-bold text-white/70">
-              Four seamless operations from document upload to instant, cited answers.
-            </p>
-          </div>
-
-          <div className="relative">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative z-10">
-              
-              {/* Step 1 */}
-              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-brand-sage transition-colors">
-                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-brand-sage flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(183,198,194,0.4)]">
-                  1
-                </div>
-                <h3 className="text-xl font-cabinet font-extrabold">Snap &amp; Upload</h3>
-                <p className="text-sm text-white/70 leading-relaxed font-bold">
-                  Capture receipts with your phone, import bills, or drag &amp; drop PDFs, Word files, and spreadsheets into the browser vault.
-                </p>
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-brand-indigo transition-colors">
-                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-brand-indigo flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(199,210,254,0.4)]">
-                  2
-                </div>
-                <h3 className="text-xl font-cabinet font-extrabold">OCR &amp; Auto-Sort</h3>
-                <p className="text-sm text-white/70 leading-relaxed font-bold">
-                  OCR extracts layout strings across every page. Ensembled neural models automatically classify and file documents into smart directories.
-                </p>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-white transition-colors">
-                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-white flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(255,255,255,0.4)]">
-                  3
-                </div>
-                <h3 className="text-xl font-cabinet font-extrabold">Embed &amp; Index</h3>
-                <p className="text-sm text-white/70 leading-relaxed font-bold">
-                  Text is split into boundary-aware chunks, embedded into 1024-dimensional vectors, and indexed in Supabase pgvector HNSW tables.
-                </p>
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex flex-col items-center text-center space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-indigo-400 transition-colors">
-                <div className="w-14 h-14 rounded-full bg-brand-charcoal border-4 border-indigo-400 flex items-center justify-center font-cabinet font-extrabold text-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-                  4
-                </div>
-                <h3 className="text-xl font-cabinet font-extrabold">Search &amp; Chat</h3>
-                <p className="text-sm text-white/70 leading-relaxed font-bold">
-                  Retrieve files by concept via vector semantic search, or chat with the RAG assistant to get cited answers, tables, and summaries.
-                </p>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* Document Types Bento Grid Section */}
+      {/* 10. Supported Document Categories Bento Grid */}
       <section id="document-types" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="bg-brand-indigo border-2 border-black px-3.5 py-1 rounded-full text-xs uppercase font-bold tracking-wider shadow-hard-sm">
@@ -1568,7 +1536,7 @@ export default function RootPage() {
             Supported Document Categories
           </h2>
           <p className="text-lg font-bold text-black/70">
-            Filing parameters, semantic vectors, and RAG understanding tailored to accounting and legal templates.
+            Filing parameters, semantic vectors, and conversational understanding tailored to common personal and business templates.
           </p>
         </div>
 
@@ -1637,7 +1605,7 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Final CTA Section */}
+      {/* 11. Final CTA Section */}
       <section className="bg-brand-indigo py-20 px-4 sm:px-6 lg:px-8 border-b-2 border-black text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-dot-pattern opacity-10 pointer-events-none" />
         <div className="max-w-4xl mx-auto relative z-10 space-y-6">
@@ -1666,7 +1634,7 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* 12. Footer */}
       <footer className="bg-brand-charcoal text-white py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-12 border-b border-white/10 pb-12 mb-12">
           
@@ -1691,13 +1659,13 @@ export default function RootPage() {
             <ul className="space-y-2 text-sm text-white/70 font-bold">
               <li><a href="#features" className="hover:text-brand-indigo transition-colors">Features</a></li>
               <li><a href="#semantic-search" className="hover:text-brand-indigo transition-colors">Vector Semantic Search</a></li>
-              <li><a href="#rag-chatbot" className="hover:text-brand-indigo transition-colors">Grounded AI Chat</a></li>
+              <li><a href="#rag-chatbot" className="hover:text-brand-indigo transition-colors">Grounded AI Assistant</a></li>
               <li><a href="#how-it-works" className="hover:text-brand-indigo transition-colors">How It Works</a></li>
               <li><Link href="/login" className="hover:text-brand-indigo transition-colors">Sign In</Link></li>
             </ul>
           </div>
 
-          {/* Column 3: Use Cases Links */}
+          {/* Column 3: Categories Links */}
           <div className="md:col-span-3 space-y-3">
             <div className="font-cabinet font-extrabold text-sm uppercase text-brand-sage tracking-wider">Categories</div>
             <ul className="space-y-2 text-sm text-white/70 font-bold">
