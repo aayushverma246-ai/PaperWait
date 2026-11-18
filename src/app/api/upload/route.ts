@@ -413,6 +413,29 @@ export async function POST(request: NextRequest) {
               (f) => f.name.toLowerCase() === folderName.toLowerCase()
             )
 
+            // 1b. Try plural/singular matching (e.g. "Resume" vs "Resumes", "Job Description" vs "Job Descriptions", "Result" vs "Results")
+            if (!matchedFolder) {
+              const cleanSuggested = folderName.trim().toLowerCase()
+              matchedFolder = folders.find((f) => {
+                const cleanExisting = f.name.trim().toLowerCase()
+                return cleanExisting === cleanSuggested + 's' || cleanExisting + 's' === cleanSuggested
+              })
+            }
+
+            // 1c. Try compatible category mapping (e.g. "Results" vs "Marksheets", "Education" vs "Study Material" / "Academic")
+            if (!matchedFolder) {
+              const cleanSuggested = folderName.trim().toLowerCase()
+              if (['results', 'marksheets'].includes(cleanSuggested)) {
+                matchedFolder = folders.find(f => ['results', 'marksheets'].includes(f.name.trim().toLowerCase()))
+              } else if (['job descriptions', 'job description'].includes(cleanSuggested)) {
+                matchedFolder = folders.find(f => ['job descriptions', 'job description'].includes(f.name.trim().toLowerCase()))
+              } else if (['resume', 'resumes'].includes(cleanSuggested)) {
+                matchedFolder = folders.find(f => ['resume', 'resumes'].includes(f.name.trim().toLowerCase()))
+              } else if (['education', 'academic', 'study material', 'notes', 'exams', 'question papers'].includes(cleanSuggested)) {
+                matchedFolder = folders.find(f => ['education', 'academic'].includes(f.name.trim().toLowerCase()))
+              }
+            }
+
             // 2. Try substring/superstring matching (e.g. "saathi" matches "saathi assist", or vice versa)
             if (!matchedFolder) {
               const cleanSuggested = folderName.trim().toLowerCase()
