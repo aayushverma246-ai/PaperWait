@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import {
   MessageSquare,
@@ -47,6 +48,7 @@ interface IndexStatus {
 
 export default function DocumentChat() {
   const supabase = createClient()
+  const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -66,6 +68,13 @@ export default function DocumentChat() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, loading])
+
+  // Automatically close chatbox when navigating to any document page so document viewer is unobstructed
+  useEffect(() => {
+    if (pathname?.includes('/dashboard/document/')) {
+      setIsOpen(false)
+    }
+  }, [pathname])
 
   // Hydrate authenticated user and persistent chat history
   useEffect(() => {
@@ -489,7 +498,7 @@ export default function DocumentChat() {
                             : 'bg-zinc-900/95 border border-zinc-800/80 text-zinc-200'
                         }`}>
                           <div className="break-words space-y-1">
-                            {formatMarkdown(msg.content)}
+                            {formatMarkdown(msg.content, () => setIsOpen(false))}
                           </div>
                         </div>
 
@@ -534,6 +543,7 @@ export default function DocumentChat() {
                                   }
                                   className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 rounded-lg transition-all group"
                                   onClick={() => {
+                                    setIsOpen(false)
                                     if (typeof window !== 'undefined') {
                                       window.dispatchEvent(new CustomEvent('app-loading-start', {
                                         detail: { title: 'Loading', subtitle: 'Decrypting secure document contents...' }
@@ -621,7 +631,8 @@ export default function DocumentChat() {
  * Rich, high-fidelity markdown-to-JSX formatter for assistant messages.
  * Formats tables, headings, code blocks, blockquotes, lists, bold keys, citations, and links.
  */
-function formatMarkdown(text: string): React.ReactNode {
+function formatMarkdown(text: string, onLinkClick?: () => void): React.ReactNode {
+  const inline = (t: string) => processInline(t, onLinkClick)
   const lines = text.split('\n')
   const elements: React.ReactNode[] = []
   let i = 0
@@ -672,7 +683,7 @@ function formatMarkdown(text: string): React.ReactNode {
                         key={hi}
                         className="px-3 py-2 text-zinc-300 font-semibold tracking-wider uppercase text-[10px] whitespace-nowrap"
                       >
-                        {processInline(h)}
+                        {inline(h)}
                       </th>
                     ))}
                   </tr>
@@ -688,7 +699,7 @@ function formatMarkdown(text: string): React.ReactNode {
                           key={ci}
                           className="px-3 py-2 text-zinc-300 text-xs whitespace-nowrap font-normal"
                         >
-                          {processInline(cell)}
+                          {inline(cell)}
                         </td>
                       ))}
                     </tr>
@@ -743,7 +754,7 @@ function formatMarkdown(text: string): React.ReactNode {
       elements.push(
         <h4 key={`h4-${i}`} className="text-xs font-bold text-zinc-200 mt-2 mb-1 flex items-center space-x-1.5">
           <span className="w-1 h-1 rounded-full bg-indigo-400 inline-block flex-shrink-0" />
-          <span>{processInline(trimmed.substring(5))}</span>
+          <span>{inline(trimmed.substring(5))}</span>
         </h4>
       )
       i++
@@ -753,7 +764,7 @@ function formatMarkdown(text: string): React.ReactNode {
       elements.push(
         <h3 key={`h3-${i}`} className="text-[13px] font-bold text-zinc-100 mt-2.5 mb-1 flex items-center space-x-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block flex-shrink-0" />
-          <span>{processInline(trimmed.substring(4))}</span>
+          <span>{inline(trimmed.substring(4))}</span>
         </h3>
       )
       i++
@@ -762,7 +773,7 @@ function formatMarkdown(text: string): React.ReactNode {
     if (trimmed.startsWith('## ')) {
       elements.push(
         <h2 key={`h2-${i}`} className="text-sm font-bold text-white mt-3 mb-1.5 pb-1 border-b border-zinc-800/80">
-          {processInline(trimmed.substring(3))}
+          {inline(trimmed.substring(3))}
         </h2>
       )
       i++
@@ -771,7 +782,7 @@ function formatMarkdown(text: string): React.ReactNode {
     if (trimmed.startsWith('# ')) {
       elements.push(
         <h1 key={`h1-${i}`} className="text-base font-bold text-white mt-3.5 mb-2 pb-1 border-b border-zinc-800">
-          {processInline(trimmed.substring(2))}
+          {inline(trimmed.substring(2))}
         </h1>
       )
       i++
@@ -782,7 +793,7 @@ function formatMarkdown(text: string): React.ReactNode {
     if (trimmed.startsWith('> ')) {
       elements.push(
         <blockquote key={`quote-${i}`} className="border-l-2 border-indigo-500 pl-3 py-1.5 my-2 bg-indigo-950/20 rounded-r-lg text-zinc-300 italic text-xs leading-relaxed">
-          {processInline(trimmed.substring(2))}
+          {inline(trimmed.substring(2))}
         </blockquote>
       )
       i++
@@ -808,7 +819,7 @@ function formatMarkdown(text: string): React.ReactNode {
             {numMatch[1]}.
           </span>
           <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
-            {processInline(numMatch[2])}
+            {inline(numMatch[2])}
           </span>
         </div>
       )
@@ -826,7 +837,7 @@ function formatMarkdown(text: string): React.ReactNode {
         <div key={`bullet-${i}`} className={`flex items-start space-x-2 my-1 ${indentClass}`}>
           <span className="text-violet-400 flex-shrink-0 mt-1.5 text-[9px] leading-none">●</span>
           <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
-            {processInline(content)}
+            {inline(content)}
           </span>
         </div>
       )
@@ -837,7 +848,7 @@ function formatMarkdown(text: string): React.ReactNode {
     // 9. Standard Paragraph
     elements.push(
       <p key={`p-${i}`} className="my-1 text-zinc-200 text-[13px] leading-relaxed">
-        {processInline(trimmed)}
+        {inline(trimmed)}
       </p>
     )
     i++
@@ -849,7 +860,7 @@ function formatMarkdown(text: string): React.ReactNode {
 /**
  * Handles inline formatting: bold, italic, code, markdown links, and document citations.
  */
-function processInline(text: string): React.ReactNode {
+function processInline(text: string, onLinkClick?: () => void): React.ReactNode {
   const parts: React.ReactNode[] = []
   let remaining = text
   let keyCounter = 0
@@ -930,6 +941,16 @@ function processInline(text: string): React.ReactNode {
           href={linkHref}
           target={linkHref.startsWith('http') ? '_blank' : undefined}
           rel={linkHref.startsWith('http') ? 'noopener noreferrer' : undefined}
+          onClick={() => {
+            if (!linkHref.startsWith('http')) {
+              onLinkClick?.()
+              if (typeof window !== 'undefined' && linkHref.includes('/dashboard/document/')) {
+                window.dispatchEvent(new CustomEvent('app-loading-start', {
+                  detail: { title: 'Loading', subtitle: 'Decrypting secure document contents...' }
+                }))
+              }
+            }
+          }}
           className="text-indigo-400 hover:text-indigo-300 underline font-medium inline-flex items-center space-x-0.5"
         >
           <span>{linkText}</span>
