@@ -95,13 +95,13 @@ export default function GlobalRouteLoader() {
 
       if (path === '/dashboard') {
         title = 'Loading Dashboard'
-        subtitle = 'Opening secure document vault...'
+        subtitle = 'Decrypting catalog structure...'
       } else if (path.includes('/dashboard/folder/')) {
         title = 'Loading Folder'
-        subtitle = 'Retrieving folder documents...'
+        subtitle = 'Decrypting catalog components...'
       } else if (path.includes('/dashboard/document/')) {
-        title = 'Loading Document'
-        subtitle = 'Opening document viewer...'
+        title = 'Loading'
+        subtitle = 'Decrypting secure document contents...'
       } else if (path === '/login') {
         title = 'Sign In'
         subtitle = 'Redirecting to login portal...'
