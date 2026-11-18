@@ -490,6 +490,17 @@ export async function POST(request: NextRequest) {
               }
             }
 
+            // Category Sanity Check: Ensure matchedFolder does not cross incompatible core categories
+            if (matchedFolder) {
+              const cleanMatched = matchedFolder.name.trim().toLowerCase()
+              const isEmpFolder = ['job descriptions', 'job description', 'resume', 'resumes'].includes(cleanMatched)
+              const isNonEmpCategory = ['bills', 'receipts', 'invoices', 'tax documents', 'identity documents', 'medical records'].includes(classification.final_category?.toLowerCase())
+              if (isEmpFolder && isNonEmpCategory) {
+                console.warn(`[upload] Discarded incompatible folder "${matchedFolder.name}" for ${classification.final_category} document.`)
+                matchedFolder = undefined
+              }
+            }
+
             if (matchedFolder) {
               targetFolderId = matchedFolder.id
               // Align classification metadata with the matched existing folder name

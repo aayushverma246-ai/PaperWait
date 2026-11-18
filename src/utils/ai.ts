@@ -1164,6 +1164,13 @@ export function postProcessClassification(
     lowerOcr.includes('income tax department') ||
     result.final_category === 'Identity Documents'
 
+  // 7. Transport / Vehicle Road Tax Documents
+  const isTransportTaxOrSlip =
+    lowerOcr.includes('transport department') ||
+    lowerOcr.includes('goods carrier') ||
+    lowerOcr.includes('mv tax') ||
+    (lowerOcr.includes('tax receipt') && (lowerOcr.includes('jharkhand') || lowerOcr.includes('rto') || lowerOcr.includes('vehicle')))
+
   // Match existing user folders (e.g. "Transport Department Jharkhand", "Shivam Kumar", "Deepak Prasad")
   const matchCandidateOrFolder = () => {
     for (const folder of existingFolders) {
@@ -1203,11 +1210,54 @@ export function postProcessClassification(
       targetFolder = existingFolders.find(f => ['results', 'marksheets'].includes(f.trim().toLowerCase())) || 'Results'
     }
     finalCategory = 'Education'
+  } else if (isTransportTaxOrSlip) {
+    if (matchedFolder) {
+      targetFolder = matchedFolder
+    } else {
+      const found = existingFolders.find(f => {
+        const lf = f.trim().toLowerCase()
+        return lf.includes('transport') || lf.includes('deepak prasad')
+      })
+      if (found) {
+        targetFolder = found
+      } else if (lowerOcr.includes('jharkhand')) {
+        targetFolder = 'Transport Department Jharkhand'
+      } else {
+        targetFolder = 'Transport Department'
+      }
+    }
+    finalCategory = 'Bills'
   } else if (matchedFolder) {
     targetFolder = matchedFolder
   } else if (isIdentity) {
     targetFolder = existingFolders.find(f => ['government ids', 'government id', 'ids'].includes(f.trim().toLowerCase())) || 'Government IDs'
     finalCategory = 'Identity Documents'
+  }
+
+  // CRITICAL SANITY GUARD: Never allow non-employment documents into Job Descriptions or Resume
+  const isEmploymentFolder = ['job descriptions', 'job description', 'resume', 'resumes'].includes(targetFolder.trim().toLowerCase())
+  if (isEmploymentFolder && !isJobDescription && !isResumeFile) {
+    console.warn(`[postProcessClassification] Blocking cross-category assignment of non-employment document to "${targetFolder}".`)
+    if (matchedFolder) {
+      targetFolder = matchedFolder
+    } else if (result.primary_entity && result.primary_entity.length >= 3 && !['unknown', 'null'].includes(result.primary_entity.toLowerCase())) {
+      targetFolder = result.primary_entity.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+    } else {
+      targetFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
+    }
+  }
+
+  // CRITICAL SANITY GUARD: Never allow non-identity documents into Government IDs
+  const isIdentityFolder = ['government ids', 'government id', 'ids'].includes(targetFolder.trim().toLowerCase())
+  if (isIdentityFolder && !isIdentity) {
+    console.warn(`[postProcessClassification] Blocking cross-category assignment of non-identity document to "${targetFolder}".`)
+    if (matchedFolder) {
+      targetFolder = matchedFolder
+    } else if (result.primary_entity && result.primary_entity.length >= 3 && !['unknown', 'null'].includes(result.primary_entity.toLowerCase())) {
+      targetFolder = result.primary_entity.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+    } else {
+      targetFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
+    }
   }
 
   // Ensure final category is a valid standard category
@@ -1324,8 +1374,9 @@ Rules:
       * Aadhaar cards, PAN cards, Driver's Licenses, Passports, Voter IDs -> suggested_folder: "Government IDs" (final_category: "Identity Documents").
       * Prescriptions, medical records, blood tests, clinical lab reports -> suggested_folder: "Medical Records" (final_category: "Medical Records").
       * Electricity, gas, water, internet, broadband bills -> suggested_folder: "Utility Bills" (final_category: "Bills").
-    - Prioritize Existing Folders: Before creating any new folder based on a primary entity, check if the Filename or the OCR text contains or matches any of the user's existing folders (case-insensitively). E.g. if the folder "Transport Department Jharkhand" or "Shivam Kumar" or "Deepak Prasad" is in the existing folders list and mentioned, suggest that folder.
-    - If there is a clear primary entity (excluding special cases above), the folder name should be that entity's name (in Title Case).
+      * Vehicle road tax receipts, MV tax payments, transport department receipts -> suggested_folder: "Transport Department Jharkhand" or the issuing department (final_category: "Bills").
+    - Negative Constraint on Existing Folders: Only reuse an existing folder if the document ACTUALLY belongs to that category or entity domain. NEVER force a document into an existing folder if there is a category conflict (for example, NEVER place a Bill, Tax Receipt, or Invoice into "Job Descriptions" or "Resume"; and NEVER place a Resume or Job Description into "Utility Bills" or "Government IDs").
+    - When no existing folder semantically matches the document, create a new folder (is_new_folder: true) named after the issuing authority or company (e.g. "Transport Department Jharkhand"), or the primary entity (e.g. "Deepak Prasad").
     - If an existing folder matches the target name case-insensitively, reuse it EXACTLY.
 5. Final Category: Classify into the single most appropriate category from the Standard categories list.
 6. Strictness: Output ONLY the JSON object. No markdown syntax, no preambles.`
@@ -1495,7 +1546,7 @@ ${condensedOcrText}`
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        reasoning_budget: 128,
+        reasoning_budget: 512,
         temperature: 0.1,
         max_tokens: 2048,
         stream: false,
@@ -1555,8 +1606,8 @@ ${condensedOcrText}`
         fastResolved = true
         if (res) {
           // Fast path only resolves early for simple financial documents with high confidence
-          const isSimpleFinancial = ['Receipts', 'Invoices', 'Bills', 'Utilities', 'Bank Documents'].includes(res.final_category)
-          if (res.confidence_score >= 0.90 && isSimpleFinancial) {
+          const isSimpleFinancial = ['Receipts', 'Invoices', 'Bills', 'Utilities', 'Bank Documents', 'Tax Documents'].includes(res.final_category)
+          if (res.confidence_score >= 0.85 && isSimpleFinancial) {
             resolved = true
             console.log(`Routing Success: Fast path resolved first with high confidence: ${res.confidence_score}`)
             resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
