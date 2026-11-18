@@ -18,6 +18,9 @@ import {
   Trash2,
   Bot,
   User as UserIcon,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react'
 
 interface ChatMessage {
@@ -51,6 +54,8 @@ export default function DocumentChat() {
   const [userId, setUserId] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [indexing, setIndexing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -60,7 +65,7 @@ export default function DocumentChat() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, loading])
 
   // Hydrate authenticated user and persistent chat history
   useEffect(() => {
@@ -129,8 +134,25 @@ export default function DocumentChat() {
     if (isOpen) {
       fetchIndexStatus()
       inputRef.current?.focus()
+    } else {
+      setShowDeleteConfirm(false)
     }
   }, [isOpen, fetchIndexStatus])
+
+  // Keyboard shortcut to close confirmation on Escape
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDeleteConfirm) {
+          setShowDeleteConfirm(false)
+        } else if (isOpen) {
+          setIsOpen(false)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKey)
+    return () => window.removeEventListener('keydown', handleGlobalKey)
+  }, [showDeleteConfirm, isOpen])
 
   useEffect(() => {
     if (isOpen && indexStatus && !indexStatus.isFullyIndexed && indexStatus.total > 0 && !indexing) {
@@ -232,6 +254,7 @@ export default function DocumentChat() {
   const clearChat = async () => {
     setMessages([])
     setInput('')
+    setShowDeleteConfirm(false)
     if (userId) {
       localStorage.removeItem(`paperwait_chat_history_${userId}`)
     }
@@ -242,12 +265,22 @@ export default function DocumentChat() {
     }
   }
 
+  const handleCopyMessage = async (content: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    } catch (err) {
+      console.warn('Failed to copy to clipboard:', err)
+    }
+  }
+
   const exampleQuestions = [
     'Summarize all my documents',
-    'Find my electricity bills',
+    'Find my vehicle tax receipts',
     'What documents mention insurance?',
     'Compare my recent invoices',
-    'Find warranty information',
+    'Find warranty or admit card details',
   ]
 
   // ---------- Render ----------
@@ -273,44 +306,88 @@ export default function DocumentChat() {
 
       {/* Chat Panel - Full responsive bottom sheet on mobile, floating card on desktop */}
       {isOpen && (
-        <div className="fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-24 sm:right-6 z-50 w-full sm:w-[460px] h-[92vh] sm:h-[min(640px,calc(100vh-7rem))] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-scale-up">
+        <div className="fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-24 sm:right-6 z-50 w-full sm:w-[480px] h-[92vh] sm:h-[min(660px,calc(100vh-7rem))] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-scale-up relative">
+          
           {/* Mobile Sheet Drag Indicator */}
           <div className="w-10 h-1 bg-zinc-700/80 rounded-full mx-auto mt-2 mb-0.5 sm:hidden flex-shrink-0" />
 
-          {/* Header with Official PaperWait Logo */}
+          {/* Header with Official PaperWait Logo & Controls */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
                 <FileText className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">PaperWait AI</h3>
-                <p className="text-[10px] text-zinc-500 font-medium">Ask about your documents</p>
+                <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
+                  <span>PaperWait AI</span>
+                  <span className="px-1.5 py-0.2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-semibold rounded-full">
+                    Grounded RAG
+                  </span>
+                </h3>
+                <p className="text-[10px] text-zinc-400 font-medium">Ask questions across your documents</p>
               </div>
             </div>
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center space-x-1">
               {messages.length > 0 && (
                 <button
-                  onClick={clearChat}
-                  className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
-                  title="New Chat / Clear History"
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                  title="Clear conversation history"
+                  aria-label="Clear conversation history"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
+                className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
                 title="Close Chat"
+                aria-label="Close Chat"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
+          {/* Delete Confirmation Modal Overlay */}
+          {showDeleteConfirm && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-2xl max-w-[340px] w-full text-center space-y-4 animate-scale-up">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto shadow-inner">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Clear Conversation?</h4>
+                  <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                    This will permanently delete your chat history with PaperWait AI on this device and the server. This action cannot be undone.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 bg-zinc-800 hover:bg-zinc-750 hover:text-white border border-zinc-700/60 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearChat}
+                    className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Chat</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Index Status Banner */}
           {indexStatus && !indexStatus.isFullyIndexed && indexStatus.total > 0 && (
-            <div className="px-4 py-2.5 bg-amber-950/20 border-b border-amber-900/30 flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-2 bg-amber-950/20 border-b border-amber-900/30 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-2 min-w-0">
                 <Database className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                 <span className="text-[10px] text-amber-400 font-semibold truncate">
@@ -341,12 +418,12 @@ export default function DocumentChat() {
                   <FileText className="w-7 h-7 text-indigo-400" />
                 </div>
                 <h4 className="text-sm font-bold text-zinc-300 mb-1">Ask about your documents</h4>
-                <p className="text-[11px] text-zinc-500 max-w-[280px] mb-6 leading-relaxed">
-                  I can search through your uploaded documents and answer questions about their contents.
+                <p className="text-[11px] text-zinc-400 max-w-[280px] mb-6 leading-relaxed">
+                  I can search through your uploaded documents and answer questions with verifiable citations.
                 </p>
 
                 <div className="w-full space-y-2">
-                  <p className="text-[10px] text-zinc-600 font-semibold uppercase tracking-wider mb-2">Try asking</p>
+                  <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2">Try asking</p>
                   {exampleQuestions.map((q, i) => (
                     <button
                       key={i}
@@ -354,10 +431,10 @@ export default function DocumentChat() {
                         setInput(q)
                         inputRef.current?.focus()
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 hover:border-zinc-750 transition-all cursor-pointer group"
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 bg-zinc-900/60 border border-zinc-850 rounded-xl text-left text-xs text-zinc-300 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 transition-all cursor-pointer group shadow-xs"
                     >
                       <span className="truncate">{q}</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-indigo-400 transition-colors flex-shrink-0 ml-2" />
+                      <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-indigo-400 transition-colors flex-shrink-0 ml-2" />
                     </button>
                   ))}
                 </div>
@@ -365,69 +442,112 @@ export default function DocumentChat() {
             ) : (
               /* Message bubbles */
               messages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`${msg.role === 'user' ? 'max-w-[88%] sm:max-w-[85%] order-2' : 'max-w-[96%] order-1'}`}>
-                    {/* Message bubble */}
-                    <div className={`px-4 py-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-md shadow-sm'
-                        : msg.error
-                          ? 'bg-red-950/30 border border-red-900/30 text-red-300 rounded-bl-md'
-                          : 'bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-bl-md shadow-sm'
-                    }`}>
-                      {msg.role === 'assistant' ? (
-                        <div className="text-xs sm:text-[13px] leading-relaxed text-zinc-200">
-                          {formatMarkdown(msg.content)}
+                <div key={idx} className="space-y-1.5">
+                  {msg.role === 'user' ? (
+                    /* User Bubble */
+                    <div className="flex justify-end">
+                      <div className="max-w-[88%] sm:max-w-[85%]">
+                        <div className="px-4 py-2.5 rounded-2xl rounded-br-xs bg-gradient-to-tr from-indigo-600 to-violet-600 text-white text-xs sm:text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap break-words font-normal">
+                          {msg.content}
                         </div>
-                      ) : (
-                        <span>{msg.content}</span>
-                      )}
-                    </div>
-
-                    {/* Source references */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-[9px] text-zinc-600 font-semibold uppercase tracking-wider px-1">
-                          Sources
-                        </p>
-                        {msg.sources.map((source, si) => (
-                          <Link
-                            key={si}
-                            href={
-                              source.pageNumber
-                                ? `/dashboard/document/${source.documentId}?page=${source.pageNumber}`
-                                : `/dashboard/document/${source.documentId}`
-                            }
-                            className="flex items-center space-x-2 px-2.5 py-1.5 bg-zinc-900/50 border border-zinc-850 rounded-lg hover:bg-zinc-900 hover:border-zinc-750 transition-all group"
-                            onClick={() => {
-                              if (typeof window !== 'undefined') {
-                                window.dispatchEvent(new CustomEvent('app-loading-start', {
-                                  detail: { title: 'Loading', subtitle: 'Decrypting secure document contents...' }
-                                }))
-                              }
-                            }}
-                          >
-                            <FileText className="w-3 h-3 text-indigo-400 flex-shrink-0" />
-                            <span className="text-[11px] text-zinc-400 group-hover:text-zinc-200 truncate transition-colors">
-                              {source.fileName}
-                              {source.pageNumber ? ` (p.${source.pageNumber})` : ''}
-                            </span>
-                          </Link>
-                        ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    /* Assistant Bubble */
+                    <div className="flex items-start space-x-2.5">
+                      <div className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-indigo-400">
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 max-w-[94%] sm:max-w-[92%] min-w-0">
+                        <div className={`px-4 py-3 rounded-2xl rounded-tl-xs text-xs sm:text-[13px] leading-relaxed shadow-sm ${
+                          msg.error
+                            ? 'bg-red-950/30 border border-red-900/40 text-red-300'
+                            : 'bg-zinc-900/95 border border-zinc-800/80 text-zinc-200'
+                        }`}>
+                          <div className="prose-chat">
+                            {formatMarkdown(msg.content)}
+                          </div>
+                        </div>
+
+                        {/* Action Bar (Copy Answer + Label) */}
+                        <div className="flex items-center justify-between mt-1 px-1 text-[10px] text-zinc-500">
+                          <span className="font-medium text-zinc-500">PaperWait AI</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMessage(msg.content, idx)}
+                            className="inline-flex items-center space-x-1 py-0.5 px-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                            title="Copy answer to clipboard"
+                          >
+                            {copiedIdx === idx ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-400 font-medium">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Verified Document Sources */}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-zinc-800/60 space-y-1.5">
+                            <p className="text-[9px] text-zinc-500 font-semibold uppercase tracking-wider px-0.5 flex items-center space-x-1">
+                              <FileText className="w-2.5 h-2.5 text-indigo-400" />
+                              <span>Verified Citations ({msg.sources.length})</span>
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {msg.sources.map((source, si) => (
+                                <Link
+                                  key={si}
+                                  href={
+                                    source.pageNumber
+                                      ? `/dashboard/document/${source.documentId}?page=${source.pageNumber}`
+                                      : `/dashboard/document/${source.documentId}`
+                                  }
+                                  className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 rounded-lg transition-all group"
+                                  onClick={() => {
+                                    if (typeof window !== 'undefined') {
+                                      window.dispatchEvent(new CustomEvent('app-loading-start', {
+                                        detail: { title: 'Loading', subtitle: 'Decrypting secure document contents...' }
+                                      }))
+                                    }
+                                  }}
+                                >
+                                  <FileText className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+                                  <span className="text-[11px] text-zinc-300 group-hover:text-white truncate max-w-[170px] transition-colors font-medium">
+                                    {source.fileName}
+                                  </span>
+                                  {source.pageNumber && (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-300 font-semibold">
+                                      p.{source.pageNumber}
+                                    </span>
+                                  )}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
 
             {/* Loading indicator */}
             {loading && (
-              <div className="flex justify-start">
-                <div className="px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-2xl rounded-bl-md">
+              <div className="flex items-start space-x-2.5">
+                <div className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-indigo-400">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <div className="px-4 py-3 bg-zinc-900/90 border border-zinc-800/80 rounded-2xl rounded-tl-xs shadow-sm">
                   <div className="flex items-center space-x-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                    <span className="text-xs text-zinc-500 font-medium">Thinking...</span>
+                    <span className="text-xs text-zinc-400 font-medium">Analyzing documents & synthesizing answer...</span>
                   </div>
                 </div>
               </div>
@@ -437,7 +557,7 @@ export default function DocumentChat() {
           </div>
 
           {/* Input area - Mobile optimized */}
-          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/70 p-3 pb-5 sm:pb-3">
+          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur-xs p-3 pb-5 sm:pb-3">
             <div className="flex items-end space-x-2">
               <textarea
                 ref={inputRef}
@@ -446,7 +566,7 @@ export default function DocumentChat() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about your documents..."
                 rows={1}
-                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-600 text-base sm:text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[100px] overflow-y-auto"
+                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[120px] overflow-y-auto leading-normal font-normal"
                 style={{ minHeight: '42px' }}
                 disabled={loading}
               />
@@ -454,6 +574,7 @@ export default function DocumentChat() {
                 onClick={sendMessage}
                 disabled={!input.trim() || loading}
                 className="flex-shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-md shadow-indigo-500/20"
+                title="Send message"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -470,9 +591,8 @@ export default function DocumentChat() {
 }
 
 /**
- * Elegant markdown-to-JSX formatter for assistant messages.
- * Beautifully formats tables, headings, lists, blockquotes, code blocks,
- * and inline elements (bold, italic, code, document citations).
+ * Rich, high-fidelity markdown-to-JSX formatter for assistant messages.
+ * Formats tables, headings, code blocks, blockquotes, lists, bold keys, citations, and links.
  */
 function formatMarkdown(text: string): React.ReactNode {
   const lines = text.split('\n')
@@ -480,12 +600,12 @@ function formatMarkdown(text: string): React.ReactNode {
   let i = 0
 
   while (i < lines.length) {
-    const line = lines[i]
-    const trimmed = line.trim()
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
 
-    // 1. Skip completely empty lines
+    // 1. Empty lines -> soft paragraph spacing
     if (!trimmed) {
-      elements.push(<div key={`space-${i}`} className="h-1.5" />)
+      elements.push(<div key={`space-${i}`} className="h-2" />)
       i++
       continue
     }
@@ -500,7 +620,6 @@ function formatMarkdown(text: string): React.ReactNode {
       }
 
       if (tableLines.length >= 2) {
-        // Table found!
         const parseRow = (rowStr: string) => {
           const inner = rowStr.replace(/^\|/, '').replace(/\|$/, '')
           return inner.split('|').map(c => c.trim())
@@ -516,15 +635,15 @@ function formatMarkdown(text: string): React.ReactNode {
           elements.push(
             <div
               key={`table-${i}`}
-              className="my-3 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/70 shadow-md scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+              className="my-3 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-md scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
             >
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="min-w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-zinc-900/90 border-b border-zinc-800">
+                  <tr className="bg-zinc-900 border-b border-zinc-800">
                     {headers.map((h, hi) => (
                       <th
                         key={hi}
-                        className="px-3.5 py-2.5 text-zinc-300 font-semibold tracking-wider uppercase text-[10px] whitespace-nowrap bg-zinc-900/90"
+                        className="px-3 py-2 text-zinc-300 font-semibold tracking-wider uppercase text-[10px] whitespace-nowrap"
                       >
                         {processInline(h)}
                       </th>
@@ -535,12 +654,12 @@ function formatMarkdown(text: string): React.ReactNode {
                   {rows.map((row, ri) => (
                     <tr
                       key={ri}
-                      className="hover:bg-zinc-900/50 transition-colors even:bg-zinc-950/30"
+                      className="hover:bg-zinc-900/60 transition-colors even:bg-zinc-950/40 odd:bg-zinc-900/20"
                     >
                       {row.map((cell, ci) => (
                         <td
                           key={ci}
-                          className="px-3.5 py-2 text-zinc-300 whitespace-nowrap font-normal"
+                          className="px-3 py-2 text-zinc-300 text-xs whitespace-nowrap font-normal"
                         >
                           {processInline(cell)}
                         </td>
@@ -560,15 +679,32 @@ function formatMarkdown(text: string): React.ReactNode {
 
     // 3. Fenced Code Block
     if (trimmed.startsWith('```')) {
+      const langMatch = trimmed.match(/^```(\w+)?/)
+      const lang = langMatch?.[1] || 'code'
       const codeLines: string[] = []
       let j = i + 1
       while (j < lines.length && !lines[j].trim().startsWith('```')) {
         codeLines.push(lines[j])
         j++
       }
+      const codeText = codeLines.join('\n')
+
       elements.push(
-        <div key={`code-${i}`} className="my-2.5 rounded-xl border border-zinc-800 bg-zinc-950 p-3 overflow-x-auto font-mono text-xs text-indigo-300">
-          <pre><code>{codeLines.join('\n')}</code></pre>
+        <div key={`code-${i}`} className="my-2.5 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-3.5 py-1.5 bg-zinc-900/80 border-b border-zinc-800 text-[10px] text-zinc-400 font-mono">
+            <span>{lang}</span>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(codeText)}
+              className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title="Copy code"
+            >
+              Copy
+            </button>
+          </div>
+          <div className="p-3 overflow-x-auto font-mono text-xs text-indigo-300">
+            <pre><code>{codeText}</code></pre>
+          </div>
         </div>
       )
       i = j < lines.length ? j + 1 : j
@@ -578,7 +714,7 @@ function formatMarkdown(text: string): React.ReactNode {
     // 4. Headings
     if (trimmed.startsWith('### ')) {
       elements.push(
-        <h3 key={`h3-${i}`} className="text-[13px] font-bold text-zinc-100 mt-3 mb-1 flex items-center space-x-1.5">
+        <h3 key={`h3-${i}`} className="text-[13px] font-bold text-zinc-100 mt-2.5 mb-1 flex items-center space-x-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block flex-shrink-0" />
           <span>{processInline(trimmed.substring(4))}</span>
         </h3>
@@ -588,7 +724,7 @@ function formatMarkdown(text: string): React.ReactNode {
     }
     if (trimmed.startsWith('## ')) {
       elements.push(
-        <h2 key={`h2-${i}`} className="text-sm font-bold text-zinc-100 mt-3.5 mb-1.5 pb-1 border-b border-zinc-800/60">
+        <h2 key={`h2-${i}`} className="text-sm font-bold text-white mt-3 mb-1.5 pb-1 border-b border-zinc-800/80">
           {processInline(trimmed.substring(3))}
         </h2>
       )
@@ -597,7 +733,7 @@ function formatMarkdown(text: string): React.ReactNode {
     }
     if (trimmed.startsWith('# ')) {
       elements.push(
-        <h1 key={`h1-${i}`} className="text-base font-bold text-white mt-4 mb-2 pb-1 border-b border-zinc-800">
+        <h1 key={`h1-${i}`} className="text-base font-bold text-white mt-3.5 mb-2 pb-1 border-b border-zinc-800">
           {processInline(trimmed.substring(2))}
         </h1>
       )
@@ -608,7 +744,7 @@ function formatMarkdown(text: string): React.ReactNode {
     // 5. Blockquote
     if (trimmed.startsWith('> ')) {
       elements.push(
-        <blockquote key={`quote-${i}`} className="border-l-2 border-indigo-500 pl-3 py-1 my-2 bg-indigo-950/20 rounded-r-lg text-zinc-300 italic text-xs">
+        <blockquote key={`quote-${i}`} className="border-l-2 border-indigo-500 pl-3 py-1.5 my-2 bg-indigo-950/20 rounded-r-lg text-zinc-300 italic text-xs leading-relaxed">
           {processInline(trimmed.substring(2))}
         </blockquote>
       )
@@ -618,17 +754,20 @@ function formatMarkdown(text: string): React.ReactNode {
 
     // 6. Horizontal Rule
     if (trimmed === '---' || trimmed === '***') {
-      elements.push(<hr key={`hr-${i}`} className="my-3 border-zinc-800" />)
+      elements.push(<hr key={`hr-${i}`} className="my-2.5 border-zinc-800/80" />)
       i++
       continue
     }
 
-    // 7. Numbered List
+    // 7. Numbered List (e.g. "1. Item")
     const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/)
     if (numMatch) {
+      const indentCount = rawLine.match(/^\s*/)?.[0].length || 0
+      const indentClass = indentCount >= 4 ? 'ml-6' : indentCount >= 2 ? 'ml-3' : 'ml-0.5'
+
       elements.push(
-        <div key={`num-${i}`} className="flex items-start space-x-2 my-1 ml-0.5">
-          <span className="text-[11px] font-bold text-indigo-400 flex-shrink-0 min-w-[1.2rem] mt-0.5">
+        <div key={`num-${i}`} className={`flex items-start space-x-2 my-1 ${indentClass}`}>
+          <span className="text-[11px] font-bold text-indigo-400 flex-shrink-0 min-w-[1.1rem] mt-0.5">
             {numMatch[1]}.
           </span>
           <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
@@ -640,12 +779,15 @@ function formatMarkdown(text: string): React.ReactNode {
       continue
     }
 
-    // 8. Bullet List
+    // 8. Bullet List (e.g. "- Item", "• Item", "* Item")
     if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
       const content = trimmed.replace(/^[-•*]\s+/, '')
+      const indentCount = rawLine.match(/^\s*/)?.[0].length || 0
+      const indentClass = indentCount >= 4 ? 'ml-6' : indentCount >= 2 ? 'ml-3' : 'ml-0.5'
+
       elements.push(
-        <div key={`bullet-${i}`} className="flex items-start space-x-2 my-1 ml-0.5">
-          <span className="text-violet-400 flex-shrink-0 mt-1 text-xs leading-none">•</span>
+        <div key={`bullet-${i}`} className={`flex items-start space-x-2 my-1 ${indentClass}`}>
+          <span className="text-violet-400 flex-shrink-0 mt-1.5 text-[9px] leading-none">●</span>
           <span className="text-zinc-200 text-[13px] leading-relaxed flex-1">
             {processInline(content)}
           </span>
@@ -658,7 +800,7 @@ function formatMarkdown(text: string): React.ReactNode {
     // 9. Standard Paragraph
     elements.push(
       <p key={`p-${i}`} className="my-1 text-zinc-200 text-[13px] leading-relaxed">
-        {processInline(line)}
+        {processInline(trimmed)}
       </p>
     )
     i++
@@ -667,22 +809,32 @@ function formatMarkdown(text: string): React.ReactNode {
   return <>{elements}</>
 }
 
+/**
+ * Handles inline formatting: bold, italic, code, markdown links, and document citations.
+ */
 function processInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = []
   let remaining = text
   let keyCounter = 0
 
   while (remaining.length > 0) {
-    const boldMatch = remaining.match(/\*\*(.+?)\*\*/)
-    const italicMatch = remaining.match(/(?<!\*)\*([^*]+?)\*(?!\*)/)
+    // 1. Bold (**text** or __text__)
+    const boldMatch = remaining.match(/\*\*(.+?)\*\*|__(.+?)__/)
+    // 2. Italic (*text* or _text_)
+    const italicMatch = remaining.match(/(?<!\*)\*([^*]+?)\*(?!\*)|(?<!_)_([^_]+?)_(?!_)/)
+    // 3. Inline Code (`code`)
     const codeMatch = remaining.match(/`(.+?)`/)
-    const docMatch = remaining.match(/\[Document:\s*(.+?)\]/)
+    // 4. Document Citations: [Document: filename.pdf, Page N] or [From "filename.pdf", Page N] or [Document: filename.pdf]
+    const docMatch = remaining.match(/\[(?:Document|From)(?::\s*|\s+)"?([^\]",]+)"?(?:,\s*(?:Page\s*)?(\d+))?\]/i)
+    // 5. Markdown Links: [Title](url)
+    const linkMatch = remaining.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/)
 
     const matches = [
       boldMatch ? { type: 'bold', match: boldMatch } : null,
       italicMatch ? { type: 'italic', match: italicMatch } : null,
       codeMatch ? { type: 'code', match: codeMatch } : null,
       docMatch ? { type: 'doc', match: docMatch } : null,
+      linkMatch ? { type: 'link', match: linkMatch } : null,
     ]
       .filter(Boolean)
       .sort((a, b) => (a!.match.index || 0) - (b!.match.index || 0))
@@ -700,15 +852,17 @@ function processInline(text: string): React.ReactNode {
     }
 
     if (first.type === 'bold') {
+      const content = first.match[1] || first.match[2]
       parts.push(
-        <strong key={`b-${keyCounter++}`} className="text-zinc-100 font-semibold">
-          {first.match[1]}
+        <strong key={`b-${keyCounter++}`} className="text-white font-semibold">
+          {content}
         </strong>
       )
     } else if (first.type === 'italic') {
+      const content = first.match[1] || first.match[2]
       parts.push(
         <em key={`i-${keyCounter++}`} className="text-zinc-300 italic">
-          {first.match[1]}
+          {content}
         </em>
       )
     } else if (first.type === 'code') {
@@ -718,11 +872,32 @@ function processInline(text: string): React.ReactNode {
         </code>
       )
     } else if (first.type === 'doc') {
+      const docName = first.match[1].trim()
+      const pageNum = first.match[2]
       parts.push(
-        <span key={`d-${keyCounter++}`} className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/60 text-indigo-300 font-medium text-[10px] mx-0.5">
+        <span
+          key={`d-${keyCounter++}`}
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-indigo-950/60 border border-indigo-850 text-indigo-300 font-medium text-[10px] mx-0.5 align-middle shadow-xs"
+        >
           <FileText className="w-2.5 h-2.5 text-indigo-400 inline flex-shrink-0" />
-          <span className="truncate max-w-[140px]">{first.match[1]}</span>
+          <span className="truncate max-w-[130px]">{docName}</span>
+          {pageNum && <span className="text-indigo-400/80 text-[9px]">(p.{pageNum})</span>}
         </span>
+      )
+    } else if (first.type === 'link') {
+      const linkText = first.match[1]
+      const linkHref = first.match[2]
+      parts.push(
+        <a
+          key={`l-${keyCounter++}`}
+          href={linkHref}
+          target={linkHref.startsWith('http') ? '_blank' : undefined}
+          rel={linkHref.startsWith('http') ? 'noopener noreferrer' : undefined}
+          className="text-indigo-400 hover:text-indigo-300 underline font-medium inline-flex items-center space-x-0.5"
+        >
+          <span>{linkText}</span>
+          {linkHref.startsWith('http') && <ExternalLink className="w-2.5 h-2.5 inline ml-0.5" />}
+        </a>
       )
     }
 
@@ -731,4 +906,3 @@ function processInline(text: string): React.ReactNode {
 
   return <>{parts}</>
 }
-

@@ -30,16 +30,18 @@
 
 - 🤖 **Ensembled Dual-Model AI Classification & Racing Pipeline**:
   - **Fast Path**: Sub-second transactional classification powered by Groq (`openai/gpt-oss-20b`) with instant failover to NVIDIA Nemotron-3-Nano (`reasoning_budget: 0`).
-  - **Deep Reasoning Path**: Context-rich taxonomy inference and entity extraction via NVIDIA Nemotron-3-Nano (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `reasoning_budget: 128`, `max_tokens: 2048`).
-  - **Dynamic Racing Protocol**: Fast path resolves early strictly for simple financial documents (`Receipts`, `Invoices`, `Bills`, `Utilities`) with high confidence ($\ge 0.90$). Complex contextual documents (resumes, job postings, exams, admit cards, government IDs) await deep reasoning to eliminate misclassifications without brittle hardcoding.
-  - **Deterministic Semantic Routing**: Resumes route to `Resume`, JDs to `Job Descriptions`, exams/admit cards/lecture modules to `Education`, government IDs to `Government IDs`, and marksheets to `Results` or candidate-specific folders.
+  - **Deep Reasoning Path**: Context-rich taxonomy inference and entity extraction via NVIDIA Nemotron-3-Nano (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `reasoning_budget: 512`, `max_tokens: 2048`).
+  - **Dynamic Racing Protocol**: Fast path resolves early strictly for simple financial documents (`Receipts`, `Invoices`, `Bills`, `Utilities`, `Tax Documents`) with high confidence ($\ge 0.85$). Complex contextual documents (resumes, job postings, exams, admit cards, government IDs) await deep reasoning to eliminate misclassifications without brittle hardcoding.
+  - **Deterministic Semantic Routing & Cross-Category Guards**: Resumes route to `Resume`, JDs to `Job Descriptions`, exams/admit cards/lecture modules to `Education`, government IDs to `Government IDs`, marksheets to `Results`, and vehicle/road tax slips to `Transport Department Jharkhand`. Cross-category guards ensure non-employment documents are never placed in `Job Descriptions` or `Resume`.
 
 - 💬 **Grounded RAG AI Document Assistant**:
   - Conversational Q&A grounded strictly in the user's private document vault.
-  - Verifiable source citations with document names and page numbers (e.g., `[Document: tax_return_2025.pdf, Page 2]`).
-  - Strict anti-hallucination guardrails and structured data formatting (bulleted summaries, comparison tables, highlighted figures).
-  - High-speed primary inference via Groq (`openai/gpt-oss-120b`) with automated failover to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`).
-  - Persistent, synchronized chat history per user stored in Supabase with Row Level Security (RLS) and instant client-side localStorage caching for 0ms load times.
+  - **Rich Markdown Formatting**: Beautiful native formatting for comparison tables, key-value bullet cards, numbered lists, blockquotes, code blocks with syntax tags, and clickable citations.
+  - **Accidental Deletion Protection**: Dedicated confirmation dialog modal before purging conversation history on client and server.
+  - **One-Click Answer Copy**: Instant clipboard copy with visual feedback for generated summaries and document comparisons.
+  - **Verifiable Citations**: Direct links with page numbers (e.g., `[Document: tax_return_2025.pdf, Page 2]`) navigating straight to the decrypted page in the document viewer.
+  - **Dual-Model Inference**: High-speed primary inference via Groq (`openai/gpt-oss-120b`) with automated failover to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`).
+  - **Dual-Layer Persistence**: Synchronized chat history in Supabase (`public.chat_messages`) with Row Level Security (RLS) coupled with zero-latency localStorage client caching.
 
 - 🔍 **1024-Dimensional Vector Semantic Search**:
   - Natural language search across document contents, concepts, and metadata.
@@ -202,6 +204,7 @@ Early Resolve Winner                    ▼                ▼
 | **Travel Documents** | Boarding Passes, Train Vouchers, Flight Itineraries, IRCTC | `Travel` | `Travel` |
 | **Medical Records** | Doctor Prescriptions, Clinic Summaries, Blood Tests | `Medical Records` | `Medical Records` |
 | **Utility Bills** | Electricity, Water, Gas, Broadband Invoices | `Utility Bills` | `Bills` |
+| **Transport & Road Tax Receipts** | Goods Carrier, MV Tax, Transport Department Jharkhand | `Transport Department Jharkhand` | `Bills` |
 | **User-Specific Hierarchies** | Context matching user's custom folders | *Preserves Existing Folder* | Dynamic |
 
 ---
