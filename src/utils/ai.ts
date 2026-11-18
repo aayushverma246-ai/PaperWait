@@ -1071,11 +1071,15 @@ export function postProcessClassification(
     lowerFileName.includes('notes') ||
     lowerFileName.includes('note_') ||
     lowerFileName.includes('study') ||
+    lowerFileName.includes('module') ||
+    lowerFileName.includes('computing') ||
     lowerFileName.includes('interview_guide') ||
     lowerFileName.includes('interview guide') ||
     lowerOcr.includes('interview field guide') ||
     lowerOcr.includes('lecture') ||
-    lowerOcr.includes('study material')
+    lowerOcr.includes('study material') ||
+    lowerOcr.includes('parallel computing') ||
+    result.short_summary?.toLowerCase()?.includes('education category')
 
   // 3. Job Description ("jd in job descriptions")
   const hasJobPostingKeywords =
@@ -1144,14 +1148,15 @@ export function postProcessClassification(
 
   // 6. Identity Documents
   const isIdentity =
-    lowerFileName.includes('proof') ||
+    /\b(aadhaar|pan|passport|voter|license|dl|identity)\b/i.test(cleanFileNameWords) ||
+    lowerFileName.includes('id_proof') ||
+    lowerFileName.includes('id proof') ||
     lowerFileName.includes('aadhaar') ||
-    lowerFileName.includes('pan') ||
-    lowerFileName.includes('license') ||
     lowerFileName.includes('passport') ||
-    lowerFileName.includes('voter') ||
+    lowerFileName.includes('driving license') ||
     lowerFileName === 'id.pdf' ||
-    lowerFileName.includes('id_') ||
+    lowerFileName.startsWith('id_') ||
+    lowerFileName.endsWith('_id.pdf') ||
     lowerOcr.includes('aadhaar') ||
     lowerOcr.includes('unique identification') ||
     lowerOcr.includes('election commission') ||
