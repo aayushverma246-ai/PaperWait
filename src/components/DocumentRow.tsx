@@ -156,10 +156,13 @@ export default function DocumentRow({
 
         {doc.signedUrl && !doc.thumbnailError && !imgError ? (
           <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex-shrink-0 relative group-hover:border-indigo-500/20 transition-all flex items-center justify-center">
+            <div className={`absolute inset-0 flex items-center justify-center text-[10px] tracking-wider uppercase ${badgeBg}`}>
+              {fileExt}
+            </div>
             <img
               src={doc.signedUrl}
               alt={doc.file_name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover relative z-10"
               loading="eager"
               onError={() => setImgError(true)}
             />

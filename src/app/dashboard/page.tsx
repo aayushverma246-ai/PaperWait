@@ -397,36 +397,53 @@ export default function DashboardPage() {
         }
       }
 
-      setFolders(foldersData || [])
-      setDocuments(docsWithUrls)
-      setSelectedIds(new Set())
-      setSelectedFolderIds(new Set())
-
-      // Trigger thumbnail preloading asynchronously in the background so it doesn't block page rendering
+      // Preload and decode thumbnail images before stopping the loader so mini previews render instantly
       if (docsWithUrls && docsWithUrls.length > 0) {
+        const failedDocIds = new Set<string>()
         const preloadPromises = docsWithUrls.map(d => {
-          const hasThumbnail = !!d.signedUrl
-          if (!hasThumbnail) return Promise.resolve()
+          if (!d.signedUrl) return Promise.resolve()
           
           return new Promise<void>((resolve) => {
             const img = new Image()
             img.src = d.signedUrl!
             const timer = setTimeout(() => {
               resolve()
-            }, 2000)
-            img.onload = () => {
+            }, 3000)
+            img.onload = async () => {
+              try {
+                if (img.decode) {
+                  await img.decode()
+                }
+              } catch (e) {
+                // Ignore decode failure
+              }
               clearTimeout(timer)
               resolve()
             }
             img.onerror = () => {
               clearTimeout(timer)
-              setDocuments(prev => prev.map(doc => doc.id === d.id ? { ...doc, thumbnailError: true } : doc))
+              failedDocIds.add(d.id)
               resolve()
             }
           })
         })
-        Promise.all(preloadPromises).catch(err => console.warn('Background preload failed:', err))
+        try {
+          await Promise.all(preloadPromises)
+        } catch (err) {
+          console.warn('Thumbnail preload warning:', err)
+        }
+
+        if (failedDocIds.size > 0) {
+          docsWithUrls = docsWithUrls.map(doc =>
+            failedDocIds.has(doc.id) ? { ...doc, thumbnailError: true } : doc
+          )
+        }
       }
+
+      setFolders(foldersData || [])
+      setDocuments(docsWithUrls)
+      setSelectedIds(new Set())
+      setSelectedFolderIds(new Set())
 
     } catch (err) {
       console.error('Error loading dashboard data:', err)

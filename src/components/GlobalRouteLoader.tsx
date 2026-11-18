@@ -14,12 +14,11 @@ export default function GlobalRouteLoader() {
   const autoHideTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    // When pathname changes, set a small timer to auto-hide the loader
-    // to give the newly mounted page's useEffect a chance to call app-loading-start
+    // Safety auto-hide fallback in case a static route never dispatches app-loading-stop
     if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current)
     autoHideTimerRef.current = setTimeout(() => {
       setLoading(false)
-    }, 200)
+    }, 6000)
 
     return () => {
       if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current)
