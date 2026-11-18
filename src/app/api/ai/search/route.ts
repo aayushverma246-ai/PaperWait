@@ -4,7 +4,9 @@
  * POST /api/ai/search
  * Body: { query: string, limit?: number }
  * 
- * Returns semantically relevant document chunks for the authenticated user.
+ * Returns semantically relevant document chunks for the authenticated user
+ * using a resilient Hybrid Scoring Engine combining dense vector similarity,
+ * title exact/keyword boosts, folder classification boosts, and content term frequency.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -21,13 +23,15 @@ const STOP_WORDS = new Set([
   'find', 'show', 'get', 'search', 'me', 'my', 'all', 'please'
 ])
 
-// Helper to strip internal OCR delimiters and markdown artifacts
+// Helper to strip internal OCR delimiters, excessive symbols, and markdown artifacts
 function cleanOcrText(rawText: string): string {
   if (!rawText) return ''
   return rawText
     .replace(/---+\s*(?:Page\s*\d+|Sheet:\s*[^-\n]+)\s*---+/gi, ' ')
     .replace(/(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)/g, ' ')
     .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[,|;]{2,}/g, ', ')
+    .replace(/\s*,\s*/g, ', ')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
@@ -56,7 +60,8 @@ function extractRelevantSnippet(rawText: string, searchPhrase: string, targetLen
     if (lastSpace > targetLength * 0.7) {
       snippet = snippet.substring(0, lastSpace)
     }
-    return snippet.trimEnd() + '...'
+    snippet = snippet.replace(/^[,.;:!|/\-\s]+/, '').trimEnd()
+    return snippet ? snippet + '...' : cleaned.substring(0, targetLength) + '...'
   }
 
   const startOffset = Math.max(0, bestMatchIndex - 50)
@@ -77,11 +82,23 @@ function extractRelevantSnippet(rawText: string, searchPhrase: string, targetLen
     }
   }
 
-  let snippet = cleaned.substring(actualStart, actualEnd).trim()
+  let snippet = cleaned.substring(actualStart, actualEnd).replace(/^[,.;:!|/\-\s]+/, '').trim()
   if (actualStart > 0) snippet = '...' + snippet
   if (actualEnd < cleaned.length) snippet = snippet + '...'
 
   return snippet
+}
+
+interface CandidateMatch {
+  id: string
+  document_id: string
+  chunk_text: string
+  page_number: number | null
+  source_metadata: any
+  vector_sim: number
+  doc: any
+  hybridScore?: number
+  keywordHits?: number
 }
 
 export async function POST(request: NextRequest) {
@@ -106,184 +123,203 @@ export async function POST(request: NextRequest) {
     }
 
     const clampedLimit = Math.min(Math.max(1, limit), 30)
-
-    // 1. Generate query embedding
-    let queryEmbedding: number[]
-    try {
-      queryEmbedding = await generateQueryEmbedding(query.trim())
-    } catch (embeddingError: any) {
-      console.error('Embedding generation failed:', embeddingError.message)
-      return NextResponse.json({
-        error: 'Semantic search temporarily unavailable',
-        details: embeddingError.message?.includes('RATE_LIMIT')
-          ? 'Rate limit reached. Please try again in a moment.'
-          : 'Embedding service error. Please try again.',
-      }, { status: 503 })
-    }
-
-    // 2. Search for similar chunks using the database function
-    // Extract meaningful query keywords for precision filtering
-    const queryKeywords = query
-      .toLowerCase()
+    const queryLower = query.toLowerCase().trim()
+    const queryKeywords = queryLower
       .split(/[\s,.;:!?/\\(){}[\]"']+/)
       .filter(t => t.length >= 2 && !STOP_WORDS.has(t))
 
-    // 2. Search for similar chunks using the database function
-    let matches: any[] = []
-    try {
-      const { data: rpcMatches, error: searchError } = await supabase.rpc(
-        'match_document_chunks',
-        {
-          query_embedding: `[${queryEmbedding.join(',')}]`,
-          match_user_id: user.id,
-          match_threshold: 0.35, // Fetch candidates for fine-grained ranking
-          match_count: clampedLimit * 3,
-        }
-      )
-
-      if (searchError) {
-        console.error('Vector search error:', searchError)
-      } else if (rpcMatches) {
-        matches = rpcMatches
-      }
-    } catch (err) {
-      console.error('Vector search exception:', err)
-    }
-
-    // 3. Keyword fallback in document titles
-    const matchedDocIds = new Set(matches.map(m => m.document_id))
-    try {
-      const queryTerm = query.trim()
-      // First try full phrase
-      const { data: directDocs } = await supabase
-        .from('documents')
-        .select('id, file_name, file_type, description, ocr_text, created_at, storage_path')
-        .eq('user_id', user.id)
-        .eq('status', 'done')
-        .ilike('file_name', `%${queryTerm}%`)
-        .limit(clampedLimit)
-
-      if (directDocs && directDocs.length > 0) {
-        for (const fbDoc of directDocs) {
-          if (!matchedDocIds.has(fbDoc.id)) {
-            matchedDocIds.add(fbDoc.id)
-            matches.unshift({
-              id: fbDoc.id,
-              document_id: fbDoc.id,
-              chunk_index: 0,
-              chunk_text: fbDoc.ocr_text ? fbDoc.ocr_text.substring(0, 400) : fbDoc.file_name,
-              page_number: 1,
-              source_metadata: { fileName: fbDoc.file_name, documentId: fbDoc.id },
-              similarity: 0.98,
-            })
-          }
-        }
-      }
-
-      // Also try individual keywords if query has terms
-      if (queryKeywords.length > 0 && matches.length < 5) {
-        for (const kw of queryKeywords.slice(0, 3)) {
-          if (kw.length < 3) continue
-          const { data: kwDocs } = await supabase
-            .from('documents')
-            .select('id, file_name, file_type, description, ocr_text, created_at, storage_path')
-            .eq('user_id', user.id)
-            .eq('status', 'done')
-            .ilike('file_name', `%${kw}%`)
-            .limit(3)
-
-          if (kwDocs) {
-            for (const doc of kwDocs) {
-              if (!matchedDocIds.has(doc.id)) {
-                matchedDocIds.add(doc.id)
-                matches.push({
-                  id: doc.id,
-                  document_id: doc.id,
-                  chunk_index: 0,
-                  chunk_text: doc.ocr_text ? doc.ocr_text.substring(0, 400) : doc.file_name,
-                  page_number: 1,
-                  source_metadata: { fileName: doc.file_name, documentId: doc.id },
-                  similarity: 0.88,
-                })
-              }
-            }
-          }
-        }
-      }
-    } catch (fbErr) {
-      console.error('Fallback search error:', fbErr)
-    }
-
-    if (!matches || matches.length === 0) {
-      return NextResponse.json({ results: [], query })
-    }
-
-    // 4. Precision Filter: Reject irrelevant noise and require true relevance
-    matches.sort((a, b) => b.similarity - a.similarity)
-    const topScore = matches[0]?.similarity || 0
-
-    // If top candidate doesn't meet the baseline relevance floor, return not found
-    if (topScore < 0.48) {
-      return NextResponse.json({ results: [], query })
-    }
-
-    // Drop-off filter: Discard low-relevance results far below the top match
-    const dynamicFloor = Math.max(0.48, topScore - 0.15)
-
-    const filteredMatches = matches.filter(match => {
-      const sim = match.similarity
-      if (sim >= 0.80) return true // Direct keyword match
-
-      const textLower = (match.chunk_text || '').toLowerCase()
-      const titleLower = (match.source_metadata?.fileName || '').toLowerCase()
-      const hasKeyword = queryKeywords.some(kw => kw.length >= 3 && (textLower.includes(kw) || titleLower.includes(kw)))
-
-      // If document contains explicit keywords from the query, allow slightly lower similarity
-      if (hasKeyword && sim >= 0.44) return true
-
-      // Pure vector similarity without keywords: must meet dynamic threshold
-      return sim >= dynamicFloor
-    })
-
-    if (filteredMatches.length === 0) {
-      return NextResponse.json({ results: [], query })
-    }
-
-    // 5. Deduplicate by document — keep best match per document
-    type ChunkMatch = (typeof filteredMatches)[number]
-    const seenDocuments = new Map<string, ChunkMatch>()
-    const deduplicatedMatches: ChunkMatch[] = []
-
-    for (const match of filteredMatches) {
-      const existing = seenDocuments.get(match.document_id)
-      if (!existing) {
-        seenDocuments.set(match.document_id, match)
-        deduplicatedMatches.push(match)
-      }
-      else if (
-        deduplicatedMatches.filter((m: ChunkMatch) => m.document_id === match.document_id).length < 2
-      ) {
-        deduplicatedMatches.push(match)
-      }
-    }
-
-    // 5. Fetch document metadata for the matched documents
-    const uniqueDocIds = [...new Set(deduplicatedMatches.map((m: ChunkMatch) => m.document_id))]
-    const { data: documents, error: docError } = await supabase
+    // 1. Fetch all user documents with their real joined folder name
+    const { data: allDocs, error: docError } = await supabase
       .from('documents')
-      .select('id, file_name, file_type, description, status, created_at, storage_path')
-      .in('id', uniqueDocIds)
+      .select('id, file_name, file_type, description, ocr_text, created_at, storage_path, folder_id, folders:folder_id(id, name)')
       .eq('user_id', user.id)
+      .eq('status', 'done')
 
     if (docError) {
       console.error('Document fetch error:', docError)
     }
 
-    const docMap = new Map((documents || []).map(d => [d.id, d]))
+    const docMap = new Map((allDocs || []).map(d => [d.id, d]))
 
-    // Generate signed URLs for preview thumbnails if applicable (for images)
-    const imageDocPaths = (documents || [])
-      .filter(d => d.storage_path && (d.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(d.file_name)))
+    // 2. Generate query embedding (with graceful fallback if embedding API fails)
+    let queryEmbedding: number[] | null = null
+    try {
+      queryEmbedding = await generateQueryEmbedding(query.trim())
+    } catch (embeddingError: any) {
+      console.warn('Embedding generation failed, falling back to hybrid keyword search:', embeddingError.message)
+    }
+
+    // 3. Retrieve dense vector matches if embedding succeeded
+    let vectorMatches: any[] = []
+    if (queryEmbedding) {
+      try {
+        const { data: rpcMatches, error: searchError } = await supabase.rpc(
+          'match_document_chunks',
+          {
+            query_embedding: `[${queryEmbedding.join(',')}]`,
+            match_user_id: user.id,
+            match_threshold: 0.25, // Broad candidate threshold for hybrid re-ranking
+            match_count: Math.max(50, clampedLimit * 4),
+          }
+        )
+
+        if (searchError) {
+          console.error('Vector search error:', searchError)
+        } else if (rpcMatches) {
+          vectorMatches = rpcMatches
+        }
+      } catch (err) {
+        console.error('Vector search exception:', err)
+      }
+    }
+
+    // 4. Candidate Pooling: Merge vector chunks + document-level title/folder matches
+    const candidateMap = new Map<string, CandidateMatch>()
+
+    for (const vm of vectorMatches) {
+      const doc = docMap.get(vm.document_id)
+      if (!doc) continue
+      candidateMap.set(vm.id, {
+        id: vm.id,
+        document_id: vm.document_id,
+        chunk_text: vm.chunk_text || '',
+        page_number: vm.page_number,
+        source_metadata: vm.source_metadata,
+        vector_sim: vm.similarity || 0,
+        doc
+      })
+    }
+
+    // Ensure documents with title or folder matches are present in candidates
+    for (const doc of (allDocs || [])) {
+      const titleLower = (doc.file_name || '').toLowerCase()
+      const folderName = (doc as any).folders?.name || ''
+      const folderLower = folderName.toLowerCase()
+
+      const hasTitleMatch = queryKeywords.some(t => titleLower.includes(t)) || titleLower.includes(queryLower)
+      const hasFolderMatch = queryKeywords.some(t => folderLower.includes(t))
+
+      if (hasTitleMatch || hasFolderMatch) {
+        const hasExistingChunk = Array.from(candidateMap.values()).some(c => c.document_id === doc.id)
+        if (!hasExistingChunk) {
+          candidateMap.set(`synth_${doc.id}`, {
+            id: `synth_${doc.id}`,
+            document_id: doc.id,
+            chunk_text: doc.ocr_text ? doc.ocr_text.substring(0, 500) : doc.file_name,
+            page_number: 1,
+            source_metadata: { fileName: doc.file_name, documentId: doc.id },
+            vector_sim: 0.35, // default baseline
+            doc
+          })
+        }
+      }
+    }
+
+    if (candidateMap.size === 0) {
+      return NextResponse.json({ results: [], query })
+    }
+
+    // 5. Hybrid Scoring Engine: Combine Dense Vector + Title + Folder + Content
+    const scoredCandidates: CandidateMatch[] = []
+
+    for (const candidate of candidateMap.values()) {
+      const doc = candidate.doc
+      const titleLower = (doc.file_name || '').toLowerCase()
+      const folderName = (doc as any).folders?.name || ''
+      const folderLower = folderName.toLowerCase()
+      const textLower = (candidate.chunk_text || '').toLowerCase()
+
+      let titleBoost = 0
+      let folderBoost = 0
+      let contentBoost = 0
+      let keywordHits = 0
+
+      // A. Title boost: Exact phrase or keyword matches
+      if (queryKeywords.length > 0 && titleLower.includes(queryLower)) {
+        titleBoost += 0.35
+        keywordHits += 3
+      } else {
+        for (const t of queryKeywords) {
+          if (titleLower.includes(t)) {
+            titleBoost += 0.12
+            keywordHits += 1
+          }
+        }
+      }
+
+      // B. Folder boost: Match user's real folder classification
+      for (const t of queryKeywords) {
+        if (folderLower.includes(t)) {
+          folderBoost += 0.20
+          keywordHits += 1
+          break
+        }
+      }
+
+      // C. Content keyword matches in chunk
+      for (const t of queryKeywords) {
+        if (textLower.includes(t)) {
+          contentBoost += 0.05
+          keywordHits += 1
+        }
+      }
+
+      // Cap individual boosts
+      titleBoost = Math.min(titleBoost, 0.40)
+      folderBoost = Math.min(folderBoost, 0.25)
+      contentBoost = Math.min(contentBoost, 0.15)
+
+      const sim = candidate.vector_sim || 0
+
+      // Noise Rejection Gate:
+      // If zero keywords match across title, folder, and text, require high vector similarity (>= 0.52)
+      if (keywordHits === 0 && sim < 0.52) {
+        continue
+      }
+
+      const hybridScore = Math.min(0.99, sim + titleBoost + folderBoost + contentBoost)
+
+      // Baseline floor: Discard candidates below 0.42 hybrid score
+      if (hybridScore < 0.42) {
+        continue
+      }
+
+      scoredCandidates.push({
+        ...candidate,
+        hybridScore,
+        keywordHits
+      })
+    }
+
+    if (scoredCandidates.length === 0) {
+      return NextResponse.json({ results: [], query })
+    }
+
+    // 6. Sort by hybridScore descending
+    scoredCandidates.sort((a, b) => (b.hybridScore || 0) - (a.hybridScore || 0))
+
+    // 7. Dynamic relative drop-off floor
+    const topScore = scoredCandidates[0].hybridScore || 0
+    const relativeFloor = Math.max(0.42, topScore - 0.25)
+    const qualifiedCandidates = scoredCandidates.filter(c => (c.hybridScore || 0) >= relativeFloor)
+
+    // 8. Deduplicate by document: keep single best chunk per document
+    const seenDocuments = new Set<string>()
+    const deduplicatedMatches: CandidateMatch[] = []
+
+    for (const match of qualifiedCandidates) {
+      if (!seenDocuments.has(match.document_id)) {
+        seenDocuments.add(match.document_id)
+        deduplicatedMatches.push(match)
+      }
+    }
+
+    const limitedMatches = deduplicatedMatches.slice(0, clampedLimit)
+
+    // 9. Generate signed URLs for preview thumbnails if applicable (for images)
+    const imageDocPaths = limitedMatches
+      .map(m => m.doc)
+      .filter(d => d?.storage_path && (d.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(d.file_name)))
       .map(d => d.storage_path)
 
     const signedUrlMap = new Map<string, string>()
@@ -304,37 +340,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Format results with cleaned, contextual snippets
-    const results = deduplicatedMatches
-      .slice(0, clampedLimit)
-      .map(match => {
-        const doc = docMap.get(match.document_id)
-        
-        const snippet = extractRelevantSnippet(match.chunk_text || '', query, 220)
+    // 10. Format results with cleaned, contextual snippets and verified metadata
+    const results = limitedMatches.map(match => {
+      const doc = match.doc
+      const snippet = extractRelevantSnippet(match.chunk_text || '', query, 220)
+      const folderName = (doc as any)?.folders?.name || 'Uncategorized'
+      const signedUrl = doc?.storage_path ? signedUrlMap.get(doc.storage_path) || null : null
 
-        let folderInfo = ''
-        if (doc?.description) {
-          try {
-            const parsed = JSON.parse(doc.description)
-            folderInfo = parsed.suggested_folder || ''
-          } catch (e) { /* ignore */ }
-        }
-
-        const signedUrl = doc?.storage_path ? signedUrlMap.get(doc.storage_path) || null : null
-
-        return {
-          documentId: match.document_id,
-          fileName: doc?.file_name || 'Unknown',
-          fileType: doc?.file_type || '',
-          snippet,
-          pageNumber: match.page_number,
-          section: match.source_metadata?.section || null,
-          similarity: Math.round(match.similarity * 100) / 100,
-          folderName: folderInfo,
-          createdAt: doc?.created_at,
-          signedUrl,
-        }
-      })
+      return {
+        documentId: match.document_id,
+        fileName: doc?.file_name || 'Unknown',
+        fileType: doc?.file_type || '',
+        snippet,
+        pageNumber: match.page_number,
+        section: match.source_metadata?.section || null,
+        similarity: Math.round((match.hybridScore || 0) * 100) / 100,
+        folderName,
+        createdAt: doc?.created_at,
+        signedUrl,
+      }
+    })
 
     return NextResponse.json({ results, query })
   } catch (error: any) {

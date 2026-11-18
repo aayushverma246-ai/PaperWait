@@ -44,12 +44,14 @@
   - **Dual-Model Inference**: High-speed primary inference via Groq (`openai/gpt-oss-120b`) with automated failover to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`).
   - **Dual-Layer Persistence**: Synchronized chat history in Supabase (`public.chat_messages`) with Row Level Security (RLS) coupled with zero-latency localStorage client caching.
 
-- 🔍 **1024-Dimensional Vector Semantic Search**:
+- 🔍 **1024-Dimensional Hybrid Vector Semantic Search**:
   - Natural language search across document contents, concepts, and metadata.
   - Powered by Cloudflare Workers AI 1024-dimensional embeddings (`@cf/qwen/qwen3-embedding-0.6b`).
   - Sub-millisecond similarity retrieval powered by PostgreSQL `pgvector` with HNSW cosine indexes (`m=16, ef_construction=64`).
-  - Hybrid search architecture: combines vector cosine similarity, title/content keyword boosting, and dynamic precision score filtering.
-  - Interactive UI with instant keyword mark highlighting, contextual snippet windows, and thumbnail previews.
+  - **Hybrid Scoring Engine**: Combines dense vector cosine similarity, exact/fuzzy title phrase matching (+0.35), title keyword matching (+0.12), folder classification matching (+0.20), and content term frequency (+0.05).
+  - **Relational Folder Joins**: Resolves verified folder names (`Resume`, `Education`, `Transport Department Jharkhand`, `Indian Railways`, `Job Descriptions`) directly via `folders:folder_id(id, name)` joins.
+  - **Dynamic Noise Filtering**: Requires high vector similarity ($\ge 0.52$) for queries without direct vocabulary matches, discarding random strings and unrelated gibberish.
+  - **Stateless Keyword Highlighting & Clean Snippets**: Precision UI highlighting with zero stateful regex side-effects, automatic OCR delimiter stripping, and image thumbnail previews.
 
 - ⚡ **Multi-Format Ingestion & Fast Processing**:
   - Ingests **PDFs**, **Images** (PNG, JPG, JPEG, WebP), **Word documents** (`.docx`/`.doc`), **Excel spreadsheets** (`.xlsx`), **PowerPoint presentations** (`.pptx`/`.ppt`), **CSV**, and **Plain Text** (`.txt`).
@@ -264,7 +266,7 @@ Early Resolve Winner                    ▼                ▼
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/ai/search` | Performs vector semantic search with title and keyword boosting (`query`, `limit`). |
+| `POST` | `/api/ai/search` | Performs 1024-d hybrid semantic search combining vector similarity, title boosts, folder joins, and content term frequency (`query`, `limit`). |
 | `POST` | `/api/ai/index` | Indexes specific documents or triggers batch backfills for unindexed documents. |
 | `GET` | `/api/ai/index-status` | Returns vector indexing metrics (total, indexed, unindexed, failed, indexing). |
 

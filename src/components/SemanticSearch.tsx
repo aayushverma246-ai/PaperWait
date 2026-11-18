@@ -40,7 +40,10 @@ function cleanSnippetText(text: string): string {
     .replace(/---+\s*(?:Page\s*\d+|Sheet:\s*[^-\n]+)\s*---+/gi, ' ')
     .replace(/(?:^|\n)\s*[-=_]{3,}\s*(?:\n|$)/g, ' ')
     .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[,|;]{2,}/g, ', ')
+    .replace(/\s*,\s*/g, ', ')
     .replace(/\s{2,}/g, ' ')
+    .replace(/^[,.;:!|/\-\s]+/, '')
     .trim()
 }
 
@@ -62,7 +65,7 @@ function highlightKeywords(text: string, query: string): React.ReactNode {
 
   if (terms.length === 0) return text
 
-  // Escape special regex characters
+  const termSet = new Set(terms.map(t => t.toLowerCase()))
   const escapedTerms = terms.map(t => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
   const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi')
 
@@ -71,7 +74,7 @@ function highlightKeywords(text: string, query: string): React.ReactNode {
   return (
     <span>
       {parts.map((part, i) =>
-        pattern.test(part) ? (
+        termSet.has(part.toLowerCase()) ? (
           <mark
             key={i}
             className="bg-indigo-500/25 text-indigo-300 px-1 py-0.5 rounded font-medium border border-indigo-500/30"
@@ -214,7 +217,7 @@ export default function SemanticSearch({ isActive, query, onToggle, onSelectQuer
           {onSelectQuery && (
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-4 max-w-md">
               <span className="text-[11px] text-zinc-500 font-medium w-full mb-1">Suggestions:</span>
-              {['resume', 'application', 'booking', 'voucher'].map((s) => (
+              {['resume', 'exam', 'admit card', 'railway ticket', 'transport'].map((s) => (
                 <button
                   key={s}
                   onClick={() => onSelectQuery(s)}
