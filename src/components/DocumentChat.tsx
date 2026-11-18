@@ -59,8 +59,8 @@ export default function DocumentChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
   }
 
   useEffect(() => {
@@ -133,10 +133,16 @@ export default function DocumentChat() {
   useEffect(() => {
     if (isOpen) {
       fetchIndexStatus()
-      // Only autofocus on desktop (width >= 640px) to prevent virtual keyboard jarring popup on mobile
-      if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+      // Scroll to bottom and open mobile/desktop keyboard immediately upon opening
+      scrollToBottom('auto')
+      inputRef.current?.focus()
+
+      const timer = setTimeout(() => {
         inputRef.current?.focus()
-      }
+        scrollToBottom('smooth')
+      }, 120)
+
+      return () => clearTimeout(timer)
     } else {
       setShowDeleteConfirm(false)
     }
@@ -582,6 +588,9 @@ export default function DocumentChat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  setTimeout(() => scrollToBottom('smooth'), 150)
+                }}
                 placeholder="Ask about your documents..."
                 rows={1}
                 className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-base sm:text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[120px] overflow-y-auto leading-normal font-normal"
