@@ -4,7 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-black.svg?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-blue.svg?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8.svg?logo=tailwind-css)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%2B%20pgvector-green.svg?logo=supabase)](https://supabase.com/)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM_APIs-green.svg)](https://build.nvidia.com/)
 [![Cloudflare Workers AI](https://img.shields.io/badge/Cloudflare-Workers_AI-orange.svg?logo=cloudflare)](https://developers.cloudflare.com/workers-ai/)
@@ -12,13 +14,13 @@
 
 **"Because waiting to find it isn't an option."**
 
-*A premium, secure, and AI-powered document intelligence safe with autonomous organization, semantic vector search, and grounded RAG document chat.*
+*A high-speed, secure, and AI-powered document intelligence safe featuring autonomous organization, 1024-dimensional semantic vector search, grounded RAG document chat, and multi-format preview generation.*
 
 ### 🌐 [paperwait.me](https://paperwait.me)
 
 ### 🎥 [Watch Product Demo](https://drive.google.com/file/d/1K95xMwCEcmCGVs2hF9aCWnMDlrArQdOy/view?usp=sharing)
 
-[Key Features](#-key-features) • [System Architecture](#-system-architecture) • [AI & Search Pipeline](#-ai--search-pipeline) • [Environment Configuration](#-environment-configuration) • [Database Setup](#-database--storage-setup) • [Security Spec](#-security-specifications)
+[Key Features](#-key-features) • [System Architecture](#-system-architecture) • [AI & Search Pipeline](#-ai--search-pipeline) • [API Reference](#-api-reference) • [Environment Configuration](#-environment-configuration) • [Database Setup](#-database--storage-setup) • [Security Spec](#-security-specifications)
 
 </div>
 
@@ -26,36 +28,51 @@
 
 ## 🌟 Key Features
 
-- 💬 **RAG AI Document Assistant**:
+- 💬 **Grounded RAG AI Document Assistant**:
   - Conversational Q&A grounded strictly in the user's private document vault.
-  - Generates verifiable citations with document names and page numbers (e.g., `[From "tax_return_2025.pdf", Page 2]`).
-  - Strict anti-hallucination guardrails and structured data synthesis (clean financial bullets and comparison tables).
+  - Verifiable source citations with document names and page numbers (e.g., `[From "tax_return_2025.pdf", Page 2]`).
+  - Strict anti-hallucination guardrails and structured data formatting (financial summary bullets, comparison tables, key dates).
   - High-speed primary inference via Groq (`openai/gpt-oss-120b`) with automated fallback to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`).
-  - Persistent, synchronized chat history per user stored in Supabase with Row Level Security.
+  - Persistent, synchronized chat history per user stored in Supabase with Row Level Security (RLS) and instant client-side localStorage caching for 0ms load times.
+
 - 🔍 **Vector Semantic Search**:
   - Natural language search across document contents, concepts, and metadata.
   - Powered by Cloudflare Workers AI 1024-dimensional embeddings (`@cf/qwen/qwen3-embedding-0.6b`).
-  - Sub-millisecond similarity retrieval powered by PostgreSQL `pgvector` with HNSW cosine indexes.
+  - Sub-millisecond similarity retrieval powered by PostgreSQL `pgvector` with HNSW cosine indexes (`m=16, ef_construction=64`).
   - Hybrid search architecture: combines vector cosine similarity, title/content keyword boosting, and dynamic precision thresholding.
   - Interactive UI with instant keyword mark highlighting, contextual snippet windows, and thumbnail previews.
-- ⚡ **Multi-Format Ingestion & Processing**:
-  - Seamlessly ingests PDFs, images (PNG, JPEG), Word docs (`.docx`/`.doc`), Excel spreadsheets (`.xlsx`), PowerPoint slides (`.pptx`/`.ppt`), CSV, and TXT files.
-  - High-throughput OCR with Nemotron NIM extraction and multi-page text preservation (`--- Page N ---`).
-  - Automatic background vector indexing immediately upon document processing completion.
+
+- ⚡ **Multi-Format Ingestion & Fast Processing**:
+  - Ingests **PDFs**, **Images** (PNG, JPG, JPEG, WebP), **Word documents** (`.docx`/`.doc`), **Excel spreadsheets** (`.xlsx`), **PowerPoint presentations** (`.pptx`/`.ppt`), **CSV**, and **Plain Text** (`.txt`).
+  - High-speed digital text extraction via PDF.js with automated fallback to NVIDIA Nemotron OCR NIM for scanned or image-based pages.
+  - Boundary-aware text chunking that preserves structural document markers (`--- Page N ---` and `--- Sheet: Name ---`) with strict forward progress and bounded memory execution.
+  - Automated background vector indexing triggered immediately upon document ingestion.
+
 - 🤖 **Ensembled Multi-Model AI Routing**:
-  - **Llama 3.1 8B**: Evaluates fast-path classification for receipts, invoices, and utility bills.
-  - **Nemotron-3-Nano Reasoning**: Executes deep taxonomy reasoning, tax forms, academic transcripts, and entity extraction.
-  - **DeepSeek V4 Flash**: Crafts human-readable 1-sentence summaries and descriptions.
-  - **Llama 3.2 11B Vision**: Interprets photo uploads, scans, and visual-only documents.
+  - **Groq Fast Path (Qwen 27B)**: Sub-second classification for transactional and everyday documents (resumes, job descriptions, invoices, bills, exams).
+  - **NVIDIA Nemotron-3-Nano Reasoning**: Deep entity extraction, tax forms, academic transcripts, and taxonomy reasoning.
+  - **NVIDIA Llama 3.2 11B Vision**: Interprets photo uploads, receipts, mobile snapshots, and visual-only documents.
+  - Dual-model racing architecture: parallel model dispatch ensuring sub-second classification response without hardcoded keyword rules.
+
 - 📁 **Smart Folder Match & Auto-Creation**:
   - Intelligently maps document context to user folder hierarchies.
-  - Matches existing folders through substring and Levenshtein distance metrics or dynamically auto-provisions organized directories.
+  - Matches existing folders through case-insensitive normalization, plural/singular compatibility (e.g. `Resume` vs `Resumes`, `Job Description` vs `Job Descriptions`), and Levenshtein typo distance metrics.
+  - Auto-provisions organized directories when no existing category matches.
+
 - 🖼️ **On-Demand Visual Previews**:
-  - Automatically extracts PDF cover pages, resizes image thumbnails, and generates high-fidelity SVG/Canvas cards for text and spreadsheets.
+  - Automatically renders PDF first-page cover previews.
+  - Resizes and compresses image thumbnails with aspect ratio preservation.
+  - Generates custom high-fidelity SVG/Canvas cards for Word, Excel spreadsheets, PowerPoint slides, and plain text files with server-side font rendering.
+
+- 🛡️ **Conflict Resolution & Generic File Renaming**:
+  - Intelligent conflict detection modal (`Replace` vs `Keep Both`).
+  - Automatically renames generic camera captures (e.g., `image.png`, `camera_capture_*.jpg`) into unique, descriptive titles based on visual summaries and extracted content.
+
 - 🔒 **Enterprise-Grade Security & Authentication**:
-  - Password recovery and reset flow with encrypted magic tokens.
+  - Authentication flow powered by Supabase Auth with PKCE and secure cookies.
+  - Password recovery and reset flow with encrypted tokens.
   - Strict Row Level Security (RLS) across all tables (`documents`, `folders`, `document_chunks`, `document_index_status`, `chat_messages`).
-  - Isolated private Supabase Storage buckets preventing cross-tenant data leakage.
+  - Isolated private Supabase Storage buckets preventing cross-tenant access.
 
 ---
 
@@ -81,17 +98,17 @@ graph TD
     ImgOcr --> LLMRoute
     TextParse --> LLMRoute
     
-    LLMRoute --> LlamaPath[Fast Path Llama 3.1 8B]
+    LLMRoute --> GroqPath[Fast Path Groq Qwen 27B]
     LLMRoute --> NemoPath[Deep Reasoning Nemotron-3-Nano]
     
-    LlamaPath --> Normalizer[Folder Match & Auto-Rename]
+    GroqPath --> Normalizer[Folder Match & Normalization]
     NemoPath --> Normalizer
     
     Normalizer --> FolderMatch{Folder exists?}
     FolderMatch -->|Yes| BindDoc[Assign document to folder]
     FolderMatch -->|No| CreateFolder[Create folder in DB] --> BindDoc
     
-    BindDoc --> GenPreview[Generate SVG/Canvas Preview Card]
+    BindDoc --> GenPreview[Generate Preview Thumbnail / Canvas Card]
     GenPreview --> SaveDB[Update DB Row: status='done']
     
     SaveDB --> AutoIndex[Semantic Indexer]
@@ -106,7 +123,7 @@ graph TD
 graph TD
     Query([User Query / Chat Prompt]) --> AuthValidate{Authenticated?}
     AuthValidate -->|No| AuthErr[401 Unauthorized]
-    AuthValidate -->|Yes| EmbedQuery[Cloudflare Qwen3 Embedding]
+    AuthValidate -->|Yes| EmbedQuery[Cloudflare Qwen3 1024-d Embedding]
     
     EmbedQuery --> VectorMatch[Supabase pgvector: match_document_chunks]
     VectorMatch -->|Cosine Similarity| HNSWIndex[(HNSW Index)]
@@ -120,8 +137,8 @@ graph TD
     subgraph RAG Chat Assistant Mode
         HNSWIndex --> GroundContext[Assemble Grounded Context & Page Citations]
         GroundContext --> PromptBuild[Inject Grounding Guardrails]
-        PromptBuild --> GroqPrimary[Groq GPT-OSS 120B]
-        GroqPrimary -->|Rate Limit / Error| CFFallback[Cloudflare GLM-4.7-Flash Fallback]
+        PromptBuild --> GroqPrimary[Groq GPT-OSS 120B Primary]
+        GroqPrimary -->|Failover / Rate Limit| CFFallback[Cloudflare GLM-4.7-Flash Fallback]
         GroqPrimary --> PersistChat[Persist to public.chat_messages]
         CFFallback --> PersistChat
         PersistChat --> ChatUI[Interactive Assistant Response + Document Citations]
@@ -134,15 +151,53 @@ graph TD
 
 | System Layer | Technology / Model | Dimensionality / Parameters | Role |
 | :--- | :--- | :--- | :--- |
-| **OCR Ingestion** | NVIDIA Nemotron OCR NIM | Specialized OCR | Multi-page text and document transcript extraction |
-| **Visual Ingestion** | Llama 3.2 11B Vision | 11 Billion | Visual content comprehension for scans and images |
-| **Fast Classification**| Llama 3.1 8B | 8 Billion | Sub-second classification for transactional documents |
+| **PDF Extraction** | PDF.js + Canvas | Native / Raster | Digital text extraction & first-page cover rendering |
+| **OCR Ingestion** | NVIDIA Nemotron OCR NIM | Specialized OCR | Multi-page scanned document text extraction |
+| **Visual Ingestion** | Llama 3.2 11B Vision | 11 Billion | Visual content comprehension for scans, photos, receipts |
+| **Fast Classification**| Groq `qwen/qwen3.8-27b` | 27 Billion | Sub-second classification for transactional and everyday documents |
 | **Deep Reasoning** | Nemotron-3-Nano Reasoning | Reasoning | Entity extraction, tax forms, academic documents |
-| **Summarization** | DeepSeek V4 Flash | Fast Generation | User-friendly 1-sentence summaries |
-| **Vector Embeddings** | `@cf/qwen/qwen3-embedding-0.6b` | **1024 dimensions** | Dense semantic representation for chunks and queries |
-| **Vector Indexing** | PostgreSQL `pgvector` HNSW | `m=16, ef=64` | Sub-millisecond approximate nearest neighbor search |
+| **Vector Embeddings** | `@cf/qwen/qwen3-embedding-0.6b` | **1024 dimensions** | Dense semantic representation for document chunks and user queries |
+| **Vector Indexing** | PostgreSQL `pgvector` HNSW | `m=16, ef_construction=64` | Sub-millisecond approximate nearest neighbor cosine search |
 | **Primary RAG LLM** | Groq `openai/gpt-oss-120b` | 120 Billion | Ultra-low-latency grounded document synthesis |
-| **Fallback RAG LLM**| Cloudflare `@cf/zai-org/glm-4.7-flash`| Resilient Fallback | Seamless automatic failover for high availability |
+| **Fallback RAG LLM**| Cloudflare `@cf/zai-org/glm-4.7-flash`| Fast Generation | Resilient high-availability failover |
+
+---
+
+## 🔌 API Reference
+
+### Document Operations
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/upload` | Ingests document metadata, initializes processing, and triggers background OCR, classification, and vector indexing. |
+| `PATCH` | `/api/documents/[id]` | Updates document folder assignment or properties. |
+| `DELETE` | `/api/documents/[id]` | Deletes document, associated previews, and vector chunks. |
+| `POST` | `/api/documents/[id]/preview` | Triggers on-demand visual preview card generation for office and text files. |
+
+### Folders
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/folders` | Creates a new user folder. |
+| `PATCH` | `/api/folders/[id]` | Renames an existing user folder. |
+| `DELETE` | `/api/folders/[id]` | Deletes folder and all contained documents and storage objects. |
+| `GET` | `/api/folders/[id]/documents` | Retrieves all documents assigned to a specific folder. |
+
+### Semantic Search & AI Indexing
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/ai/search` | Performs vector semantic search with title and keyword boosting (`query`, `limit`). |
+| `POST` | `/api/ai/index` | Indexes specific documents or triggers batch backfills for unindexed documents. |
+| `GET` | `/api/ai/index-status` | Returns vector indexing metrics (total, indexed, unindexed, failed, indexing). |
+
+### RAG Chatbot
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/ai/chat` | Grounded multi-turn conversational Q&A against indexed documents. |
+| `GET` | `/api/ai/chat/history` | Fetches synchronized chat history for the authenticated user. |
+| `DELETE` | `/api/ai/chat/history` | Clears conversation history. |
 
 ---
 
@@ -158,24 +213,24 @@ cp .env.local.example .env.local
 | :--- | :--- | :---: |
 | `NEXT_PUBLIC_SUPABASE_URL` | Public API URL of your Supabase project instance | **Yes** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client-side anonymous public key for Supabase API requests | **Yes** |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secret service role key (Required for secure background processing) | **Yes** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret service role key (Required for secure background processing in `after()`) | **Yes** |
 | `NVIDIA_API_KEY_OCR` | NVIDIA API credential for the Nemotron OCR NIM | **Yes** |
-| `NVIDIA_API_KEY_LLM` | NVIDIA API credential for Llama/Nemotron/DeepSeek models | **Yes** |
+| `NVIDIA_API_KEY_LLM` | NVIDIA API credential for Nemotron reasoning and vision models | **Yes** |
+| `GROQ_API_KEY` | Groq Cloud API key for ultra-fast classification and RAG chat inference | **Yes** |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID for Workers AI embeddings and fallback LLM | **Yes** |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Workers AI permissions | **Yes** |
-| `GROQ_API_KEY` | Groq Cloud API key for ultra-fast RAG chatbot inference | **Yes** |
-| `GOTENBERG_URL` | Gotenberg document conversion service (Optional, defaults to local dev server) | *No* |
+| `GOTENBERG_URL` | Gotenberg document conversion service (Optional) | *No* |
 
 ---
 
 ## 🗄️ Database & Storage Setup
 
-Database migrations are located in the `supabase/migrations/` directory and should be executed in order:
+Database migrations are located in `supabase/migrations/` and should be executed in order:
 
 ### 1. Core Schema (`20260715000000_init.sql`)
-- `public.folders`: User folders and hierarchies.
-- `public.documents`: Stores document metadata, statuses, OCR transcripts, AI classifications, and folder relationships.
-- Enforces user isolation via Row Level Security (`auth.uid() = user_id`).
+- `public.folders`: User folder directories and hierarchies.
+- `public.documents`: Document metadata, statuses (`processing`, `done`, `failed`), OCR transcripts, AI classifications, and folder relationships.
+- Enforces strict user isolation via Row Level Security (`auth.uid() = user_id`).
 
 ### 2. Semantic Search & Vector Embeddings (`20261019000000_document_embeddings.sql`)
 - Enables PostgreSQL `pgvector` extension.
@@ -198,6 +253,10 @@ CREATE POLICY "Allow users to read their own folder"
 CREATE POLICY "Allow users to insert their own files"
   ON storage.objects FOR INSERT
   WITH CHECK ( bucket_id = 'documents' AND (auth.uid()::text = (storage.foldername(name))[1]) );
+
+CREATE POLICY "Allow users to delete their own files"
+  ON storage.objects FOR DELETE
+  USING ( bucket_id = 'documents' AND (auth.uid()::text = (storage.foldername(name))[1]) );
 ```
 
 ---
@@ -217,7 +276,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 3. Production Build
-Verify TypeScript compilation and generate the production bundle:
+Verify TypeScript compilation and generate the optimized production bundle:
 ```bash
 npm run build
 ```
