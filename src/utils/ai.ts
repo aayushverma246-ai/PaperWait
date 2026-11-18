@@ -752,19 +752,59 @@ export function matchExistingFolder(suggested: string, existingFolders: string[]
   if (!cleanSuggested) return 'Uncategorized'
 
   const lowerSuggested = cleanSuggested.toLowerCase()
+  const lowerFileName = (fileName || '').toLowerCase()
 
-  // 1. Exact case-insensitive match
+  // Determine if it is a transactional document (e.g. resume, cover letter, receipt, invoice, bill, job description, marksheet)
+  const isTransactional =
+    lowerFileName.includes('resume') ||
+    lowerFileName.includes('cv') ||
+    lowerFileName.includes('cover') ||
+    lowerFileName.includes('letter') ||
+    lowerFileName.includes('receipt') ||
+    lowerFileName.includes('invoice') ||
+    lowerFileName.includes('bill') ||
+    lowerFileName.includes('jd') ||
+    lowerFileName.includes('job description')
+
+  // 1. Filename keyword match FIRST! (If the filename contains an existing folder name as a whole word, prefer it)
+  if (fileName) {
+    const cleanFileName = fileName.toLowerCase().replace(/[_-\s]+/g, ' ')
+    // Sort existing folders by length descending to match the most specific one first
+    const sortedFolders = [...existingFolders].sort((a, b) => b.length - a.length)
+    for (const folder of sortedFolders) {
+      const cleanFolder = folder.trim().toLowerCase()
+      // Skip generic folders from overriding
+      if (['uncategorized', 'miscellaneous', 'personal', 'photos'].includes(cleanFolder)) continue
+
+      // Skip single-word folders for transactional files unless it matches the default folder name for this transaction type
+      const isSingleWord = !cleanFolder.includes(' ')
+      if (isTransactional && isSingleWord && !['resume', 'resumes', 'job descriptions', 'job description', 'receipts', 'invoices', 'utility bills', 'marksheets', 'results'].includes(cleanFolder)) {
+        continue
+      }
+
+      if (cleanFolder.length >= 3) {
+        const escapedFolder = cleanFolder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regex = new RegExp(`\\b${escapedFolder}\\b`, 'i')
+        if (regex.test(cleanFileName)) {
+          console.log(`Filename match override: "${suggested}" -> "${folder}" (filename: "${fileName}")`)
+          return folder
+        }
+      }
+    }
+  }
+
+  // 2. Exact case-insensitive match
   const exactMatch = existingFolders.find(f => f.trim().toLowerCase() === lowerSuggested)
   if (exactMatch) return exactMatch
 
-  // 2. Plural / singular match (e.g. "Resume" vs "Resumes", "Job Description" vs "Job Descriptions", "Result" vs "Results")
+  // 3. Plural / singular match (e.g. "Resume" vs "Resumes", "Job Description" vs "Job Descriptions", "Result" vs "Results")
   const pluralMatch = existingFolders.find(f => {
     const ef = f.trim().toLowerCase()
     return ef === lowerSuggested + 's' || ef + 's' === lowerSuggested
   })
   if (pluralMatch) return pluralMatch
 
-  // 3. Category folder synonyms to prevent folder fragmentation
+  // 4. Category folder synonyms to prevent folder fragmentation
   if (['results', 'marksheets', 'transcripts', 'grades'].includes(lowerSuggested)) {
     const found = existingFolders.find(f => ['results', 'marksheets', 'transcripts'].includes(f.trim().toLowerCase()))
     if (found) return found
@@ -781,8 +821,12 @@ export function matchExistingFolder(suggested: string, existingFolders: string[]
     const found = existingFolders.find(f => ['education', 'academic'].includes(f.trim().toLowerCase()))
     if (found) return found
   }
+  if (['government ids', 'government id', 'ids', 'id', 'identity documents'].includes(lowerSuggested)) {
+    const found = existingFolders.find(f => ['government ids', 'government id', 'ids'].includes(f.trim().toLowerCase()))
+    if (found) return found
+  }
 
-  // 4. Substring matching for multi-word folders (e.g. "Saathi Assist" matches "Saathi")
+  // 5. Substring matching for multi-word folders (e.g. "Transport Department Jharkhand", "Saathi Assist")
   for (const folder of existingFolders) {
     const cleanFolder = folder.trim().toLowerCase()
     if (['uncategorized', 'miscellaneous', 'personal'].includes(cleanFolder)) continue
@@ -793,7 +837,7 @@ export function matchExistingFolder(suggested: string, existingFolders: string[]
     }
   }
 
-  // 5. Fallback to title case of suggested
+  // 6. Fallback to title case of suggested
   return cleanSuggested.split(/\s+/)
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
@@ -999,6 +1043,168 @@ export function postProcessClassification(
   let finalCategory = (result.final_category || 'Miscellaneous').trim()
   let documentTitle = result.document_title
 
+  const lowerFileName = (fileName || '').toLowerCase()
+  const lowerOcr = (ocrText || '').toLowerCase()
+  const cleanFileNameWords = lowerFileName.replace(/[^a-z0-9]/g, ' ')
+
+  // 1. Admit cards, hall tickets, exams, question papers -> Education
+  const isAdmitCardOrExam =
+    lowerFileName.includes('admit') ||
+    lowerFileName.includes('hall_ticket') ||
+    lowerFileName.includes('hall ticket') ||
+    lowerFileName.includes('exam') ||
+    lowerFileName.includes('mid') ||
+    lowerFileName.includes('end') ||
+    lowerFileName.includes('question_paper') ||
+    lowerFileName.includes('question paper') ||
+    /\b(admit|hallticket|midsem|endsem|exam|quiz)\b/i.test(cleanFileNameWords) ||
+    lowerOcr.includes('admit card') ||
+    lowerOcr.includes('hall ticket') ||
+    lowerOcr.includes('e-admit card') ||
+    lowerOcr.includes('semester examination') ||
+    lowerOcr.includes('question paper') ||
+    (lowerOcr.includes('roll number') && lowerOcr.includes('examination'))
+
+  // 2. Study material / lecture notes -> Education
+  const isStudyOrLecture =
+    lowerFileName.includes('lecture') ||
+    lowerFileName.includes('notes') ||
+    lowerFileName.includes('note_') ||
+    lowerFileName.includes('study') ||
+    lowerFileName.includes('interview_guide') ||
+    lowerFileName.includes('interview guide') ||
+    lowerOcr.includes('interview field guide') ||
+    lowerOcr.includes('lecture') ||
+    lowerOcr.includes('study material')
+
+  // 3. Job Description ("jd in job descriptions")
+  const hasJobPostingKeywords =
+    lowerOcr.includes('job profile') ||
+    lowerOcr.includes('job description') ||
+    lowerOcr.includes('job announcement form') ||
+    lowerOcr.includes('selection process') ||
+    lowerOcr.includes('recruitment process') ||
+    lowerOcr.includes('stipend details') ||
+    lowerOcr.includes('salary details') ||
+    lowerOcr.includes('job designation') ||
+    lowerOcr.includes('roles and responsibilities') ||
+    lowerOcr.includes('roles & responsibilities') ||
+    (lowerOcr.includes('eligibility criteria') && (lowerOcr.includes('compensation') || lowerOcr.includes('ctc') || lowerOcr.includes('stipend')))
+
+  const isJobDescription =
+    !isStudyOrLecture &&
+    !isAdmitCardOrExam &&
+    (
+      lowerFileName.startsWith('nxt') ||
+      lowerFileName.includes('nxt') ||
+      /\b(jd|jaf|job)\b/i.test(cleanFileNameWords) ||
+      lowerFileName.includes('job description') ||
+      lowerFileName.includes('job_description') ||
+      lowerFileName.includes('job posting') ||
+      lowerFileName.includes('job profile') ||
+      result.short_summary?.toLowerCase()?.includes('job posting') ||
+      result.short_summary?.toLowerCase()?.includes('job description') ||
+      result.short_summary?.toLowerCase()?.includes('internship notice') ||
+      hasJobPostingKeywords
+    )
+
+  // 4. Marksheet / Result ("results in results")
+  const isMarksheetOrResult =
+    !isAdmitCardOrExam &&
+    (
+      /\b(result|results|marksheet|marksheets|transcript|transcripts|10th|12th|cbse|icse|ssc|hsc)\b/i.test(cleanFileNameWords) ||
+      lowerFileName.includes('marks card') ||
+      lowerFileName.includes('grade card') ||
+      lowerFileName.includes('score card') ||
+      lowerFileName.includes('marksheet') ||
+      lowerFileName.includes('result') ||
+      lowerOcr.includes('marks statement') ||
+      lowerOcr.includes('marksheet') ||
+      lowerOcr.includes('mark sheet') ||
+      lowerOcr.includes('statement of marks') ||
+      lowerOcr.includes('academic transcript') ||
+      result.document_title?.toLowerCase() === 'marksheet'
+    )
+
+  // 5. Resume / CV ("resumes in resumes")
+  const hasResumeKeywords =
+    /\b(resume|cv)\b/i.test(cleanFileNameWords) ||
+    lowerFileName.includes('curriculum vitae') ||
+    lowerFileName.includes('curriculum_vitae') ||
+    lowerOcr.includes('curriculum vitae') ||
+    (lowerOcr.includes('professional summary') && lowerOcr.includes('education')) ||
+    (lowerOcr.includes('work experience') && (lowerOcr.includes('skills') || lowerOcr.includes('projects')))
+
+  const isResumeFile =
+    !isStudyOrLecture &&
+    !isAdmitCardOrExam &&
+    !isMarksheetOrResult &&
+    !isJobDescription &&
+    hasResumeKeywords
+
+  // 6. Identity Documents
+  const isIdentity =
+    lowerFileName.includes('proof') ||
+    lowerFileName.includes('aadhaar') ||
+    lowerFileName.includes('pan') ||
+    lowerFileName.includes('license') ||
+    lowerFileName.includes('passport') ||
+    lowerFileName.includes('voter') ||
+    lowerFileName === 'id.pdf' ||
+    lowerFileName.includes('id_') ||
+    lowerOcr.includes('aadhaar') ||
+    lowerOcr.includes('unique identification') ||
+    lowerOcr.includes('election commission') ||
+    lowerOcr.includes('driving license') ||
+    lowerOcr.includes('income tax department') ||
+    result.final_category === 'Identity Documents'
+
+  // Match existing user folders (e.g. "Transport Department Jharkhand", "Shivam Kumar", "Deepak Prasad")
+  const matchCandidateOrFolder = () => {
+    for (const folder of existingFolders) {
+      const lf = folder.trim().toLowerCase()
+      if (['uncategorized', 'miscellaneous', 'personal', 'education', 'resume', 'job descriptions', 'results', 'government ids'].includes(lf)) continue
+      if (cleanFileNameWords.includes(lf) || lowerFileName.includes(lf.replace(/\s+/g, '_')) || lowerFileName.includes(lf.replace(/\s+/g, '-'))) {
+        return folder
+      }
+      if (lf.length >= 5 && lowerOcr.includes(lf)) {
+        return folder
+      }
+    }
+    return null
+  }
+
+  const matchedFolder = matchCandidateOrFolder()
+
+  let targetFolder = suggestedFolder
+
+  if (isAdmitCardOrExam || isStudyOrLecture) {
+    targetFolder = existingFolders.find(f => ['education', 'academic'].includes(f.trim().toLowerCase())) || 'Education'
+    finalCategory = 'Education'
+  } else if (isJobDescription) {
+    targetFolder = existingFolders.find(f => ['job descriptions', 'job description'].includes(f.trim().toLowerCase())) || 'Job Descriptions'
+    finalCategory = 'Employment'
+  } else if (isResumeFile) {
+    targetFolder = existingFolders.find(f => ['resume', 'resumes'].includes(f.trim().toLowerCase())) || 'Resume'
+    finalCategory = 'Employment'
+    if (!documentTitle || documentTitle.toLowerCase() === 'resume') {
+      const name = result.primary_entity || 'Candidate'
+      documentTitle = `${name} Resume`
+    }
+  } else if (isMarksheetOrResult) {
+    if (matchedFolder) {
+      targetFolder = matchedFolder
+    } else {
+      targetFolder = existingFolders.find(f => ['results', 'marksheets'].includes(f.trim().toLowerCase())) || 'Results'
+    }
+    finalCategory = 'Education'
+  } else if (matchedFolder) {
+    targetFolder = matchedFolder
+  } else if (isIdentity) {
+    targetFolder = existingFolders.find(f => ['government ids', 'government id', 'ids'].includes(f.trim().toLowerCase())) || 'Government IDs'
+    finalCategory = 'Identity Documents'
+  }
+
   // Ensure final category is a valid standard category
   if (!CATEGORY_DEFAULT_FOLDERS[finalCategory]) {
     const matchedCategory = Object.keys(CATEGORY_DEFAULT_FOLDERS).find(
@@ -1008,33 +1214,33 @@ export function postProcessClassification(
   }
 
   // Ensure suggested folder is not empty or generic uncategorized
-  if (!suggestedFolder || suggestedFolder.toLowerCase() === 'uncategorized') {
-    suggestedFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
+  if (!targetFolder || targetFolder.toLowerCase() === 'uncategorized') {
+    targetFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
   }
 
   // If document title is missing, generate a clean default from filename or folder
   if (!documentTitle || documentTitle.toLowerCase() === 'unknown' || documentTitle.toLowerCase() === 'null') {
-    documentTitle = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ') : suggestedFolder
+    documentTitle = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ') : targetFolder
   }
 
-  // Normalize suggestedFolder against user's existing folders (exact, plural/singular, or category synonym)
-  suggestedFolder = matchExistingFolder(suggestedFolder, existingFolders, fileName)
+  // Normalize targetFolder against user's existing folders
+  targetFolder = matchExistingFolder(targetFolder, existingFolders, fileName)
 
-  const isNewFolder = !existingFolders.some(f => f.trim().toLowerCase() === suggestedFolder.toLowerCase())
+  const isNewFolder = !existingFolders.some(f => f.trim().toLowerCase() === targetFolder.toLowerCase())
 
   return {
     ...result,
     document_title: documentTitle,
-    suggested_folder: suggestedFolder,
+    suggested_folder: targetFolder,
     is_new_folder: isNewFolder,
     final_category: finalCategory,
   }
 }
 
 /**
- * Extracts key metadata and classifies a document using DeepSeek V4 Flash.
- * Uses a programmatically condensed context of the first 15 meaningful lines of OCR text
- * to minimize latency, tokens, and prevent unnecessary repeated processing.
+ * Extracts key metadata and classifies a document using dual-model AI routing:
+ * races a fast path for simple financial documents and a deep reasoning model (Nemotron with thinking budget)
+ * for complex documents (employment, education, credentials).
  */
 export async function classifyDocument(
   ocrText: string,
@@ -1047,12 +1253,12 @@ export async function classifyDocument(
     throw new Error('NVIDIA_API_KEY_LLM is not defined in environment')
   }
 
-  // 1. Programmatically extract the first 25 meaningful lines (capped at 1500 chars) to provide rich context without rate-limiting
+  // 1. Programmatically extract the first 30 meaningful lines (capped at 1800 chars) to provide rich context without rate-limiting
   const lines = ocrText
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith('--- Page'))
-  const condensedOcrText = lines.slice(0, 25).join('\n').slice(0, 1500)
+  const condensedOcrText = lines.slice(0, 30).join('\n').slice(0, 1800)
 
   const foldersList = existingFolders.length > 0
     ? existingFolders.map((f) => `"${f}"`).join(', ')
@@ -1081,68 +1287,58 @@ Standard categories (final_category must be exactly one of these):
 - Identity Documents (Aadhaar cards, PAN cards, Driver's licenses, Passports, Voter IDs, Government ID cards)
 - Medical Records (Medical prescription sheets, health logs, clinic summary files, patient intake forms)
 - Prescriptions (Doctor prescription slips, pharmacy orders)
-- Lab Reports (Blood test reports, MRI scans, radiology files, diagnostic lab reports, urine/stool check sheets)
+- Lab Reports (Blood test reports, MRI scans, radiology files, diagnostic lab reports)
 - Bills (Electricity bills, water bills, gas bills, broadband bills, general utility billing invoices)
 - Invoices (B2B invoices, supply orders, vendor service invoices, purchase invoices)
-- Receipts (Retail receipts, restaurant lunch bills, taxi receipts, shop purchase receipts, payment receipts)
+- Receipts (Retail receipts, restaurant lunch bills, taxi receipts, payment receipts)
 - Bank Documents (Bank account statements, bank passbooks, check photos, deposit slips, bank letters)
-- Insurance (Health insurance policies, car insurance policies, life insurance certificates, premium invoices)
-- Education (School/college marks card, degree certificates, class 10/12 results sheets, registration profiles, college transcripts, course registrations)
-- Certificates (Birth certificates, marriage certificates, achievement certificates, seminar participation sheets)
+- Insurance (Health insurance policies, car insurance policies, life insurance certificates)
+- Education (School/college marks card, degree certificates, class 10/12 results sheets, college transcripts, exam question papers, admit cards, hall tickets)
+- Certificates (Birth certificates, marriage certificates, achievement certificates, seminar participation)
 - Legal Documents (Rent agreements, sale deeds, contracts, affidavits, power of attorney, court papers)
-- Tax Documents (Income tax returns, Form 16, W-2, PAN cards when uploaded for tax validation)
-- Employment (Resumes, CVs, job offer letters, job application confirmations, employment contract agreements, payslips)
+- Tax Documents (Income tax returns, Form 16, W-2, PAN cards)
+- Employment (Resumes, CVs, job descriptions, campus placement notices, offer letters, employment contracts, payslips)
 - Travel (Flight tickets, boarding passes, hotel booking receipts, train tickets, travel itineraries)
 - Personal (Personal letters, hand-written journal pages, photographs, greeting cards)
 - Utilities (Electricity bills, internet/broadband bills, sewage/water bills, gas pipeline bills)
 - Miscellaneous (Any document not fitting any of the above categories)
 
 Rules:
-1. Document Title: Detect the title or header of the document from the text (e.g. "Aadhaar Card", "Tax Invoice", "Complete Blood Count Report", "Rent Agreement", or null if not identifiable).
-2. Important Entities: Extract key names of persons, organizations (companies, hospitals, schools, etc.), dates, and ID/reference numbers (Aadhaar number, PAN, DL number, Invoice ID) from the text.
+1. Document Title: Detect the title or header of the document from the text.
+2. Important Entities: Extract key names of persons, organizations, dates, and ID numbers.
 3. Primary Entity: Identify the main subject (person, company, client, property, hospital) that this document is centered around.
-   - Look at the Filename first! If the filename is "Aadhar_Aayush.pdf" or "Aayush_Resume_93.pdf", the primary entity is "Aayush". If the filename is "BESCOM_Bill.pdf", the primary entity is "BESCOM". Pay close attention to words before/after underscores or hyphens in filenames as they often denote client, project, or person names.
-   - Look at the OCR text to confirm (e.g. For "Aadhaar_Aayush.pdf", the person is "Aayush"; for "Electricity_Bill_July.pdf" from "BESCOM", it could be "BESCOM"; for a clinic bill, it could be the hospital/clinic name).
 4. Intelligent Folder Detection & Creation:
-    - Prioritize Existing Folders: Before creating any new folder based on a primary entity, check if the Filename or the OCR text contains or matches any of the user's existing folders (case-insensitively). E.g. if the folder "Saathi Assist" is in the existing folders list and the filename contains "Saathi_Assist" or "Saathi Assist", you MUST suggest that existing folder name as the suggested_folder (with is_new_folder as false) instead of proposing a new folder for any newly discovered entity.
     - Special Cases for Everyday Folders (Route these intuitive document types directly to standard folder names):
       * Resumes or CVs -> suggested_folder: "Resume" (final_category: "Employment").
       * Job Descriptions, campus placement notices, JAF, job postings, hiring criteria, stipend/salary recruitment postings -> suggested_folder: "Job Descriptions" (final_category: "Employment").
-      * Examination question papers, semester tests, mid/end-sem exam papers -> suggested_folder: "Education" (final_category: "Education"). Do NOT create a folder for the university or college name.
+      * Examination question papers, semester tests, mid/end-sem exam papers, admit cards, hall tickets -> suggested_folder: "Education" (final_category: "Education"). Do NOT create a folder for candidate name or university/college name.
       * Marksheets, grade sheets, report cards, transcripts, exam results, 10th/12th board results -> suggested_folder: "Results" (final_category: "Education").
       * Travel bookings, train/flight tickets, retiring room vouchers, boarding passes, IRCTC -> suggested_folder: "Travel" (final_category: "Travel").
       * Internship completion certificates, course certificates, achievement certificates -> suggested_folder: "Certificates" (final_category: "Certificates").
-      * Cover letters, letters of intent -> suggested_folder: "Cover Letters" (final_category: "Employment").
       * Lecture notes, study guides, interview preparation guides -> suggested_folder: "Education" (final_category: "Education").
       * Aadhaar cards, PAN cards, Driver's Licenses, Passports, Voter IDs -> suggested_folder: "Government IDs" (final_category: "Identity Documents").
       * Prescriptions, medical records, blood tests, clinical lab reports -> suggested_folder: "Medical Records" (final_category: "Medical Records").
       * Electricity, gas, water, internet, broadband bills -> suggested_folder: "Utility Bills" (final_category: "Bills").
-      * Bank statements, passbook pages -> suggested_folder: "Bank Statements" (final_category: "Bank Documents").
-      * Income tax returns, W-2, Form 16 -> suggested_folder: "Tax Documents" (final_category: "Tax Documents").
-      * Insurance policies, premium receipts -> suggested_folder: "Insurance" (final_category: "Insurance").
-      * Admission letters, course registrations, exam application forms -> suggested_folder: "Academic" (final_category: "Education").
-      * Receipts, retail purchase receipts, fee receipts, payment confirmations -> suggested_folder: "Receipts" (final_category: "Receipts").
-    - If there is a clear primary entity (person name, company, hospital, project, client, etc. - excluding the special cases above), the folder name should be that entity's name (in Title Case, e.g. "Aayush" or "BESCOM").
-    - If an existing folder from the list matches the target folder name case-insensitively, reuse it EXACTLY (set suggested_folder to the existing folder name, set is_new_folder to false).
-    - If no existing folder matches, suggest the target name as the new folder name (set is_new_folder to true).
-    - If there is NO clear primary entity or special case match, classify the document into the most appropriate category from the Standard categories list, and use that category name as the suggested_folder.
-5. Final Category: Classify the document into the single most appropriate category from the Standard categories list. Categorization must be deterministic and accurate. Use "Miscellaneous" only as a last resort.
-6. Confidence Score: A decimal between 0.0 and 1.0 representing your confidence in this categorization.
-7. Short Summary: A concise summary of 1-2 sentences. Mention what the document is, whose it is if identifiable, and the most important details (without exposing full sensitive data).
-8. Strictness: Output ONLY the JSON object. Do not include markdown code block syntax (like \`\`\`json ... \`\`\`), no preambles, no trailing text.
-9. Categorization & Folder Precedence: Financial transaction documents like payment receipts, payment confirmations, purchase receipts, invoices, and billing statements MUST be categorized as "Receipts", "Bills", or "Invoices", even if they are for tuition fees, school charges, medical bills, or travel tickets.`
+    - Prioritize Existing Folders: Before creating any new folder based on a primary entity, check if the Filename or the OCR text contains or matches any of the user's existing folders (case-insensitively). E.g. if the folder "Transport Department Jharkhand" or "Shivam Kumar" or "Deepak Prasad" is in the existing folders list and mentioned, suggest that folder.
+    - If there is a clear primary entity (excluding special cases above), the folder name should be that entity's name (in Title Case).
+    - If an existing folder matches the target name case-insensitively, reuse it EXACTLY.
+5. Final Category: Classify into the single most appropriate category from the Standard categories list.
+6. Strictness: Output ONLY the JSON object. No markdown syntax, no preambles.`
 
   const userPrompt = `Classify this document context and extract entities into a JSON object.
 
 File Name: ${fileName || 'unknown'}
 Existing Folders: [${foldersList}]
-${batchHint ? `Batch Hint (this document belongs to a batch that shares these keywords): ${batchHint}` : ''}
+${batchHint ? `Batch Hint: ${batchHint}` : ''}
 
 First page of OCR text:
 ${condensedOcrText}`
 
   const extractJsonFromText = (rawContent: string): ClassificationResult => {
     let jsonText = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+    jsonText = jsonText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
+
+    // Extract JSON object using matching braces algorithm to prevent syntax errors on trailing text or thoughts
     const startIdx = jsonText.indexOf('{')
     if (startIdx !== -1) {
       let braceCount = 0
@@ -1174,10 +1370,26 @@ ${condensedOcrText}`
       }
       if (endIdx !== -1) {
         jsonText = jsonText.slice(startIdx, endIdx + 1)
+      } else {
+        const lastBrace = jsonText.lastIndexOf('}')
+        if (lastBrace > startIdx) {
+          jsonText = jsonText.slice(startIdx, lastBrace + 1)
+        }
       }
     }
 
-    const parsed = JSON.parse(jsonText)
+    let parsed: any
+    try {
+      parsed = JSON.parse(jsonText)
+    } catch {
+      const match = rawContent.match(/\{[\s\S]*\}/)
+      if (match) {
+        parsed = JSON.parse(match[0])
+      } else {
+        throw new Error('Could not parse JSON from model output')
+      }
+    }
+
     return {
       document_title: parsed.document_title || null,
       important_entities: {
@@ -1195,53 +1407,47 @@ ${condensedOcrText}`
     }
   }
 
-  // Fast path: Groq Qwen 27B / GPT-OSS (300-800ms)
-  const callGroq = async (): Promise<ClassificationResult> => {
-    const groqKey = process.env.GROQ_API_KEY
-    if (!groqKey) throw new Error('GROQ_API_KEY not defined')
+  // Fast path: Groq GPT-OSS 20B if available, or Nemotron with reasoning_budget: 0 (sub-second)
+  const callFast = async (): Promise<ClassificationResult> => {
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-oss-20b',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1,
+            max_tokens: 1024,
+          }),
+          signal: AbortSignal.timeout(6000),
+          keepalive: true,
+        } as any)
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`,
-      },
-      body: JSON.stringify({
-        model: 'qwen/qwen3.8-27b',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 384,
-      }),
-      signal: AbortSignal.timeout(7000),
-      keepalive: true,
-    } as any)
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`Groq request failed: ${response.status} - ${errText}`)
+        if (response.ok) {
+          const resJson = await response.json()
+          const content = resJson.choices?.[0]?.message?.content?.trim()
+          if (content) return extractJsonFromText(content)
+        }
+      } catch (groqErr) {
+        console.warn('Fast path Groq call skipped or rate-limited, falling back to Nvidia fast:', groqErr)
+      }
     }
 
-    const resJson = await response.json()
-    const content = resJson.choices?.[0]?.message?.content?.trim()
-    if (!content) throw new Error('Groq returned empty content')
-    return extractJsonFromText(content)
-  }
-
-  // Nvidia Path: Nemotron-3-Nano-Omni with reasoning_budget: 0 for fast 700-1500ms execution
-  const callNvidia = async (): Promise<ClassificationResult> => {
-    const nvidiaKey = process.env.NVIDIA_API_KEY_LLM
-    if (!nvidiaKey) throw new Error('NVIDIA_API_KEY_LLM not defined')
-
+    // Nvidia Fast Path with budget 0 (takes ~500ms)
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${nvidiaKey}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
@@ -1251,80 +1457,117 @@ ${condensedOcrText}`
         ],
         reasoning_budget: 0,
         temperature: 0.1,
-        max_tokens: 384,
+        max_tokens: 1024,
         stream: false,
       }),
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(8000),
       keepalive: true,
     } as any)
 
     if (!response.ok) {
       const errText = await response.text()
-      throw new Error(`Nvidia request failed: ${response.status} - ${errText}`)
+      throw new Error(`Nvidia fast request failed: ${response.status} - ${errText}`)
     }
 
     const resJson = await response.json()
     const content = resJson.choices?.[0]?.message?.content?.trim()
-    if (!content) throw new Error('Nvidia returned empty content')
+    if (!content) throw new Error('Nvidia fast returned empty content')
+    return extractJsonFromText(content)
+  }
+
+  // Deep Reasoning Path: Nemotron with reasoning_budget: 128 (accurate entity and context reasoning)
+  const callDeepReasoning = async (): Promise<ClassificationResult> => {
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        reasoning_budget: 128,
+        temperature: 0.1,
+        max_tokens: 2048,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(28000),
+      keepalive: true,
+    } as any)
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Nvidia deep reasoning request failed: ${response.status} - ${errText}`)
+    }
+
+    const resJson = await response.json()
+    const content = resJson.choices?.[0]?.message?.content?.trim()
+    if (!content) throw new Error('Nvidia deep reasoning returned empty content')
     return extractJsonFromText(content)
   }
 
   try {
-    console.log('Classify Document: Fast AI Routing Pipeline Initiated...')
+    console.log('Classify Document: Dual-Model AI Routing Pipeline Initiated...')
 
-    // Race both active models in parallel for minimum latency and maximum accuracy
-    const groqPromise = (async () => {
+    // Race fast path and deep reasoning in parallel
+    const fastPromise = (async () => {
       try {
-        console.log('Routing: Querying Groq (Qwen 27B Fast Path)...')
-        const res = await callGroq()
+        const res = await callFast()
         res.suggested_folder = matchExistingFolder(res.suggested_folder, existingFolders, fileName)
         return res
       } catch (err) {
-        console.warn('Routing: Groq fast path failed or timed out:', err)
+        console.warn('Routing: Fast path failed or timed out:', err)
         return null
       }
     })()
 
-    const nvidiaPromise = (async () => {
+    const deepPromise = (async () => {
       try {
-        console.log('Routing: Querying Nvidia Nemotron (Direct Path)...')
-        const res = await callNvidia()
+        const res = await callDeepReasoning()
         res.suggested_folder = matchExistingFolder(res.suggested_folder, existingFolders, fileName)
         return res
       } catch (err) {
-        console.warn('Routing: Nvidia direct path failed or timed out:', err)
+        console.warn('Routing: Deep reasoning path failed or timed out:', err)
         return null
       }
     })()
 
-    let groqResolved = false
-    let nvidiaResolved = false
-    let groqResult: ClassificationResult | null = null
-    let nvidiaResult: ClassificationResult | null = null
+    let fastResolved = false
+    let deepResolved = false
+    let fastResult: ClassificationResult | null = null
+    let deepResult: ClassificationResult | null = null
 
     const result = await new Promise<ClassificationResult>((resolve, reject) => {
       let resolved = false
 
-      const handleGroq = (res: ClassificationResult | null) => {
+      const handleFast = (res: ClassificationResult | null) => {
         if (resolved) return
-        groqResult = res
-        groqResolved = true
+        fastResult = res
+        fastResolved = true
         if (res) {
-          resolved = true
-          console.log(`Routing Success: Groq fast path resolved first (Confidence: ${res.confidence_score})`)
-          resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
-          return
+          // Fast path only resolves early for simple financial documents with high confidence
+          const isSimpleFinancial = ['Receipts', 'Invoices', 'Bills', 'Utilities', 'Bank Documents'].includes(res.final_category)
+          if (res.confidence_score >= 0.90 && isSimpleFinancial) {
+            resolved = true
+            console.log(`Routing Success: Fast path resolved first with high confidence: ${res.confidence_score}`)
+            resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
+            return
+          }
         }
         checkDone()
       }
 
-      const handleNvidia = (res: ClassificationResult | null) => {
+      const handleDeep = (res: ClassificationResult | null) => {
         if (resolved) return
-        nvidiaResult = res
-        nvidiaResolved = true
+        deepResult = res
+        deepResolved = true
         if (res) {
           resolved = true
-          console.log(`Routing Success: Nvidia path resolved (Confidence: ${res.confidence_score})`)
+          console.log(`Routing Success: Deep reasoning path (Nemotron) resolved with confidence: ${res.confidence_score}`)
           resolve(postProcessClassification(res, existingFolders, fileName, condensedOcrText))
           return
         }
@@ -1333,20 +1576,21 @@ ${condensedOcrText}`
 
       const checkDone = () => {
         if (resolved) return
-        if (groqResolved && nvidiaResolved) {
+        if (fastResolved && deepResolved) {
           resolved = true
-          if (groqResult) {
-            resolve(postProcessClassification(groqResult, existingFolders, fileName, condensedOcrText))
-          } else if (nvidiaResult) {
-            resolve(postProcessClassification(nvidiaResult, existingFolders, fileName, condensedOcrText))
+          if (deepResult) {
+            resolve(postProcessClassification(deepResult, existingFolders, fileName, condensedOcrText))
+          } else if (fastResult) {
+            console.log('Routing: Using fast path fallback result.')
+            resolve(postProcessClassification(fastResult, existingFolders, fileName, condensedOcrText))
           } else {
-            reject(new Error('Both Groq and Nvidia classification paths failed.'))
+            reject(new Error('Both fast path and deep reasoning classification paths failed.'))
           }
         }
       }
 
-      groqPromise.then(handleGroq)
-      nvidiaPromise.then(handleNvidia)
+      fastPromise.then(handleFast)
+      deepPromise.then(handleDeep)
     })
 
     return result
