@@ -752,91 +752,48 @@ export function matchExistingFolder(suggested: string, existingFolders: string[]
   if (!cleanSuggested) return 'Uncategorized'
 
   const lowerSuggested = cleanSuggested.toLowerCase()
-  const lowerFileName = (fileName || '').toLowerCase()
 
-  const dedicatedFolders = [
-    'resume', 'resumes', 'job descriptions', 'job description', 'results',
-    'marksheets', 'education', 'study material', 'exams', 'question papers',
-    'receipts', 'invoices', 'utility bills', 'government ids', 'travel', 'certificates'
-  ]
-  const isDedicatedSuggested = dedicatedFolders.includes(lowerSuggested)
-
-  // 1. Filename keyword match (only for non-dedicated folders or when matching dedicated folder variants)
-  if (fileName && !isDedicatedSuggested) {
-    const cleanFileName = fileName.toLowerCase().replace(/[_-\s]+/g, ' ')
-    // Sort existing folders by length descending to match the most specific one first
-    const sortedFolders = [...existingFolders].sort((a, b) => b.length - a.length)
-    for (const folder of sortedFolders) {
-      const cleanFolder = folder.trim().toLowerCase()
-      // Skip generic folders from overriding
-      if (['uncategorized', 'miscellaneous', 'personal', 'photos'].includes(cleanFolder)) continue
-
-      if (cleanFolder.length >= 3) {
-        // Escape special characters for regex safety
-        const escapedFolder = cleanFolder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const regex = new RegExp(`\\b${escapedFolder}\\b`, 'i')
-        if (regex.test(cleanFileName)) {
-          console.log(`Filename match override: "${suggested}" -> "${folder}" (filename: "${fileName}")`)
-          return folder
-        }
-      }
-    }
-  }
-
-  // 2. Exact case-insensitive match
+  // 1. Exact case-insensitive match
   const exactMatch = existingFolders.find(f => f.trim().toLowerCase() === lowerSuggested)
   if (exactMatch) return exactMatch
 
-  // 2b. Plural / singular match (e.g. "Resume" vs "Resumes", "Job Description" vs "Job Descriptions", "Result" vs "Results")
+  // 2. Plural / singular match (e.g. "Resume" vs "Resumes", "Job Description" vs "Job Descriptions", "Result" vs "Results")
   const pluralMatch = existingFolders.find(f => {
     const ef = f.trim().toLowerCase()
     return ef === lowerSuggested + 's' || ef + 's' === lowerSuggested
   })
   if (pluralMatch) return pluralMatch
 
-  // 2c. Compatible category mapping to existing user folders
-  if (['results', 'marksheets'].includes(lowerSuggested)) {
-    const found = existingFolders.find(f => ['results', 'marksheets'].includes(f.trim().toLowerCase()))
+  // 3. Category folder synonyms to prevent folder fragmentation
+  if (['results', 'marksheets', 'transcripts', 'grades'].includes(lowerSuggested)) {
+    const found = existingFolders.find(f => ['results', 'marksheets', 'transcripts'].includes(f.trim().toLowerCase()))
     if (found) return found
   }
-  if (['job descriptions', 'job description'].includes(lowerSuggested)) {
+  if (['job descriptions', 'job description', 'jd', 'jds', 'job postings'].includes(lowerSuggested)) {
     const found = existingFolders.find(f => ['job descriptions', 'job description'].includes(f.trim().toLowerCase()))
     if (found) return found
   }
-  if (['resume', 'resumes'].includes(lowerSuggested)) {
+  if (['resume', 'resumes', 'cv', 'cvs'].includes(lowerSuggested)) {
     const found = existingFolders.find(f => ['resume', 'resumes'].includes(f.trim().toLowerCase()))
     if (found) return found
   }
-  if (['study material', 'notes', 'exams', 'question papers', 'education', 'academic'].includes(lowerSuggested)) {
+  if (['education', 'academic', 'study material', 'notes', 'exams', 'question papers'].includes(lowerSuggested)) {
     const found = existingFolders.find(f => ['education', 'academic'].includes(f.trim().toLowerCase()))
     if (found) return found
   }
 
-  // 3. Fuzzy substring match (if suggested is substring of existing, or vice versa)
-  // Sort existing folders by length descending to match the most specific one first
-  const sortedFolders = [...existingFolders].sort((a, b) => b.length - a.length)
-  const commonCategories = ['invoices', 'receipts', 'bills', 'personal', 'photos', 'medical records', 'uncategorized', 'miscellaneous']
-
-  for (const folder of sortedFolders) {
+  // 4. Substring matching for multi-word folders (e.g. "Saathi Assist" matches "Saathi")
+  for (const folder of existingFolders) {
     const cleanFolder = folder.trim().toLowerCase()
-    if (commonCategories.includes(cleanFolder)) continue
-
-    // Check if one contains the other (using word boundary check to prevent false positives like "plantation" matching "plan")
-    if (cleanFolder.length >= 3 && lowerSuggested.length >= 3) {
-      const escapedFolder = cleanFolder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const folderRegex = new RegExp(`\\b${escapedFolder}\\b`, 'i')
-
-      const escapedSuggested = lowerSuggested.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const suggestedRegex = new RegExp(`\\b${escapedSuggested}\\b`, 'i')
-
-      if (folderRegex.test(lowerSuggested) || suggestedRegex.test(cleanFolder)) {
-        console.log(`Fuzzy matched folder suggestion: "${suggested}" -> "${folder}"`)
+    if (['uncategorized', 'miscellaneous', 'personal'].includes(cleanFolder)) continue
+    if (cleanFolder.length >= 4 && lowerSuggested.length >= 4) {
+      if (cleanFolder.includes(lowerSuggested) || lowerSuggested.includes(cleanFolder)) {
         return folder
       }
     }
   }
 
-  // 4. Fallback to title case of suggested
+  // 5. Fallback to title case of suggested
   return cleanSuggested.split(/\s+/)
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
@@ -1029,8 +986,8 @@ const CATEGORY_DEFAULT_FOLDERS: Record<string, string> = {
 }
 
 /**
- * Normalizes suggested folder and final category outputs using programmatic overrides and existing folder matching.
- * This runs at the output boundary of all execution paths (try ensembling, catch fallback, and default recovery).
+ * Normalizes classification results against existing folders and standard conventions.
+ * Pure normalization without brittle hardcoded strings or file-specific hacks.
  */
 export function postProcessClassification(
   result: ClassificationResult,
@@ -1038,429 +995,29 @@ export function postProcessClassification(
   fileName?: string,
   ocrText?: string
 ): ClassificationResult {
-  let suggestedFolder = result.suggested_folder
-  let finalCategory = result.final_category
+  let suggestedFolder = (result.suggested_folder || 'Miscellaneous').trim()
+  let finalCategory = (result.final_category || 'Miscellaneous').trim()
   let documentTitle = result.document_title
 
-  // Pre-process: Detect and correct clear mismatches between primary_entity and suggested_folder
-  const primary = result.primary_entity || ''
-  if (primary && suggestedFolder) {
-    const cleanPrimary = primary.trim().toLowerCase()
-    const cleanSuggested = suggestedFolder.trim().toLowerCase()
-    const genericFolders = [
-      'uncategorized', 'miscellaneous', 'personal', 'photos', 'resume', 'resumes',
-      'job descriptions', 'job description', 'marksheets', 'results', 'certificates',
-      'receipts', 'utility bills', 'government ids', 'travel', 'education', 'academic',
-      'study material', 'notes', 'exams', 'question papers', 'cover letters', 'bills',
-      'invoices', 'medical records', 'prescriptions', 'lab reports', 'tax documents',
-      'bank statements', 'insurance', 'legal documents'
-    ]
-    if (!genericFolders.includes(cleanSuggested) && !cleanSuggested.includes(cleanPrimary) && !cleanPrimary.includes(cleanSuggested)) {
-      // Check if they are fuzzy matched (e.g. "Swari Burman" vs "Swati Burman")
-      let isFuzzyMatch = false
-      const a = cleanPrimary, b = cleanSuggested
-      if (Math.abs(a.length - b.length) <= 3) {
-        const tmp: number[][] = []
-        for (let i = 0; i <= a.length; i++) tmp[i] = [i]
-        for (let j = 0; j <= b.length; j++) tmp[0][j] = j
-        for (let i = 1; i <= a.length; i++) {
-          for (let j = 1; j <= b.length; j++) {
-            tmp[i][j] = Math.min(
-              tmp[i - 1][j] + 1,
-              tmp[i][j - 1] + 1,
-              tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-            )
-          }
-        }
-        const dist = tmp[a.length][b.length]
-        const threshold = Math.min(2, Math.floor(Math.max(a.length, b.length) / 4))
-        if (dist <= threshold) {
-          isFuzzyMatch = true
-        }
-      }
-      if (!isFuzzyMatch) {
-        console.log(`Overriding mismatched folder suggestion: "${suggestedFolder}" -> "${primary}"`)
-        suggestedFolder = primary
-      }
-    }
-  }
-
-  const lowerFileName = (fileName || '').toLowerCase()
-  const lowerOcr = (ocrText || '').toLowerCase()
-  // Collapse single-character spacings (e.g. "P R O F E S S I O N A L" -> "professional") for robust OCR matching
-  const normalizedOcr = lowerOcr.replace(/([a-z])\s+(?=[a-z])/gi, '$1')
-  const cleanFileNameWords = lowerFileName.replace(/[^a-z0-9]/g, ' ')
-
-  // 1. Check for Question Papers & Examination Tests FIRST (so university names don't become folders)
-  const isQuestionPaperOrExam =
-    lowerFileName.includes('mid') ||
-    lowerFileName.includes('end') ||
-    lowerFileName.includes('exam') ||
-    lowerFileName.includes('quiz') ||
-    lowerFileName.includes('question_paper') ||
-    lowerFileName.includes('question paper') ||
-    /\b(midsem|endsem|exam|quiz)\b/i.test(cleanFileNameWords) ||
-    lowerOcr.includes('semester examination') ||
-    lowerOcr.includes('mid semester') ||
-    lowerOcr.includes('end semester') ||
-    lowerOcr.includes('question paper') ||
-    lowerOcr.includes('full marks:') ||
-    lowerOcr.includes('time: 02 hours') ||
-    lowerOcr.includes('time: 2 hours') ||
-    lowerOcr.includes('time: 3 hours') ||
-    lowerOcr.includes('time: 03 hours') ||
-    (lowerOcr.includes('instructions:') && (lowerOcr.includes('questions') || lowerOcr.includes('answer any'))) ||
-    result.document_title?.toLowerCase()?.includes('semester examination') ||
-    result.document_title?.toLowerCase()?.includes('question paper')
-
-  // 2. Check for Interview Guides & Study Materials / Lecture Notes
-  const isInterviewGuide =
-    lowerFileName.includes('interview_guide') ||
-    lowerFileName.includes('interview guide') ||
-    lowerFileName.includes('field guide') ||
-    lowerFileName.includes('question bank') ||
-    lowerOcr.includes('interview field guide') ||
-    lowerOcr.includes('interview guide') ||
-    lowerOcr.includes('question bank with spoken-style answers') ||
-    (lowerOcr.includes('interview preparation') && !lowerFileName.includes('resume'))
-
-  const isLectureNotesOrStudy =
-    isInterviewGuide ||
-    lowerFileName.includes('lecture') ||
-    lowerFileName.includes('notes') ||
-    lowerFileName.includes('note_') ||
-    lowerFileName.includes('study') ||
-    lowerOcr.includes('lecture') ||
-    lowerOcr.includes('solid principles') ||
-    lowerOcr.includes('study material')
-
-  // 3. Check for Job Descriptions & Campus Placement Announcements ("jd in job descriptions")
-  const hasJobPostingKeywords =
-    lowerOcr.includes('job profile') ||
-    lowerOcr.includes('propile details') ||
-    lowerOcr.includes('role profile') ||
-    lowerOcr.includes('job description') ||
-    lowerOcr.includes('job announcement form') ||
-    lowerOcr.includes('selection process') ||
-    lowerOcr.includes('recruitment process') ||
-    lowerOcr.includes('assessment test') ||
-    lowerOcr.includes('hiring process') ||
-    lowerOcr.includes('stipend details') ||
-    lowerOcr.includes('stiind detals') ||
-    lowerOcr.includes('salary details') ||
-    lowerOcr.includes('malary detaals') ||
-    lowerOcr.includes('place of posting') ||
-    lowerOcr.includes('place of prsttng') ||
-    lowerOcr.includes('job designation') ||
-    lowerOcr.includes('aib desigration') ||
-    lowerOcr.includes('no. of vacancies') ||
-    lowerOcr.includes('tentative vacancies') ||
-    lowerOcr.includes('roles and responsibilities') ||
-    lowerOcr.includes('roles & responsibilities') ||
-    (lowerOcr.includes('basic pay') && (lowerOcr.includes('full time') || lowerOcr.includes('ful time') || lowerOcr.includes('internship') || lowerOcr.includes('joining bonus'))) ||
-    (lowerOcr.includes('eligibility criteria') && (lowerOcr.includes('compensation') || lowerOcr.includes('ctc') || lowerOcr.includes('selection process')))
-
-  const isJobDescription =
-    !isInterviewGuide &&
-    !isLectureNotesOrStudy &&
-    !isQuestionPaperOrExam &&
-    (
-      /\b(jd|jaf|job|posting|nxt)\b/i.test(cleanFileNameWords) ||
-      lowerFileName.includes('job description') ||
-      lowerFileName.includes('job_description') ||
-      lowerFileName.includes('job posting') ||
-      lowerFileName.includes('job profile') ||
-      lowerFileName.includes('role profile') ||
-      hasJobPostingKeywords
+  // Ensure final category is a valid standard category
+  if (!CATEGORY_DEFAULT_FOLDERS[finalCategory]) {
+    const matchedCategory = Object.keys(CATEGORY_DEFAULT_FOLDERS).find(
+      cat => cat.toLowerCase() === finalCategory.toLowerCase()
     )
-
-  // 4. Check for Cover Letters
-  const isCoverLetter =
-    lowerFileName.includes('cover') ||
-    lowerFileName.includes('letter_of_intent') ||
-    lowerOcr.includes('cover letter') ||
-    lowerOcr.includes('dear hiring manager') ||
-    lowerOcr.includes('dear hiring team') ||
-    lowerOcr.includes('dear recruiter')
-
-  const isCoverLetterOrContract =
-    isCoverLetter ||
-    lowerFileName.includes('offer') ||
-    lowerFileName.includes('contract') ||
-    lowerFileName.includes('payslip') ||
-    lowerFileName.includes('pay slip')
-
-  // 5. Check for Marksheets, Results, Transcripts FIRST ("simple logic results in results")
-  // (Prevents CBSE marksheets listing "WORK EXPERIENCE" internal subject from triggering resume logic)
-  const isRegistrationOrAcademic =
-    lowerFileName.includes('registration') ||
-    lowerFileName.includes('enrollment') ||
-    lowerFileName.includes('admission') ||
-    lowerFileName.includes('course') ||
-    lowerFileName.includes('gate') ||
-    lowerOcr.includes('course registration') ||
-    lowerOcr.includes('enrollment confirmation') ||
-    lowerOcr.includes('gate office') ||
-    lowerOcr.includes('application form') ||
-    result.document_title?.toLowerCase()?.includes('registration') ||
-    result.document_title?.toLowerCase()?.includes('enrollment') ||
-    result.document_title?.toLowerCase()?.includes('admission')
-
-  const isMarksheetOrResult =
-    !isQuestionPaperOrExam &&
-    (
-      /\b(result|results|marksheet|marksheets|transcript|transcripts|10th|12th|cbse|icse|ssc|hsc)\b/i.test(cleanFileNameWords) ||
-      lowerFileName.includes('marks card') ||
-      lowerFileName.includes('grade card') ||
-      lowerFileName.includes('score card') ||
-      lowerFileName.includes('marksheet') ||
-      lowerFileName.includes('result') ||
-      lowerOcr.includes('marks statement') ||
-      lowerOcr.includes('marksheet') ||
-      lowerOcr.includes('mark sheet') ||
-      lowerOcr.includes('secondary school examination') ||
-      lowerOcr.includes('senior school certificate examination') ||
-      lowerOcr.includes('central board of secondary education') ||
-      lowerOcr.includes('statement of marks') ||
-      lowerOcr.includes('academic transcript') ||
-      result.document_title?.toLowerCase() === 'marksheet' ||
-      result.document_title?.toLowerCase() === 'grade card' ||
-      result.document_title?.toLowerCase() === 'marks statement cum certificate'
-    ) &&
-    !isRegistrationOrAcademic
-
-  // 6. Check for Resumes / CVs ("resumes in resumes")
-  const hasResumeKeywords =
-    /\b(resume|cv)\b/i.test(cleanFileNameWords) ||
-    lowerFileName.includes('curriculum_vitae') ||
-    lowerFileName.includes('curriculum vitae') ||
-    lowerOcr.includes('curriculum vitae') ||
-    normalizedOcr.includes('curriculumvitae') ||
-    normalizedOcr.includes('professionalsummary') ||
-    (lowerOcr.includes('professional summary') && lowerOcr.includes('education')) ||
-    (lowerOcr.includes('work experience') && (lowerOcr.includes('skills') || lowerOcr.includes('projects'))) ||
-    ((lowerOcr.includes('education') || lowerOcr.includes('academics')) && lowerOcr.includes('skills') && lowerOcr.includes('projects'))
-
-  const isResumeFile =
-    !isInterviewGuide &&
-    !isLectureNotesOrStudy &&
-    !isQuestionPaperOrExam &&
-    !isMarksheetOrResult &&
-    !isJobDescription &&
-    !isCoverLetterOrContract &&
-    hasResumeKeywords
-
-  // 6. Check for Travel Documents (Tickets, Vouchers, IRCTC)
-  const isTravel =
-    lowerFileName.includes('irctc') ||
-    lowerFileName.includes('ticket') ||
-    lowerFileName.includes('boarding') ||
-    lowerFileName.includes('voucher') ||
-    lowerFileName.includes('retiring') ||
-    lowerFileName.includes('itinerary') ||
-    lowerOcr.includes('irctc') ||
-    lowerOcr.includes('retiring room') ||
-    lowerOcr.includes('boarding pass') ||
-    lowerOcr.includes('train reservation status') ||
-    lowerOcr.includes('flight ticket') ||
-    result.final_category === 'Travel'
-
-  // 7. Check for Certificates
-  const isCertificate =
-    lowerFileName.includes('certificate') ||
-    lowerFileName.includes('cert') ||
-    lowerOcr.includes('internship completion certificate') ||
-    lowerOcr.includes('certificate of completion') ||
-    lowerOcr.includes('this is to certify that') ||
-    result.final_category === 'Certificates'
-
-  const isPersonalOnboarding =
-    lowerFileName.includes('bgc') ||
-    lowerFileName.includes('onboarding') ||
-    lowerOcr.includes('background check') ||
-    lowerOcr.includes('background verification')
-
-  const isIdentityDocument =
-    lowerFileName.includes('proof') ||
-    lowerFileName.includes('aadhaar') ||
-    lowerFileName.includes('pan') ||
-    lowerFileName.includes('license') ||
-    lowerFileName.includes('passport') ||
-    lowerFileName.includes('voter') ||
-    lowerOcr.includes('aadhaar') ||
-    lowerOcr.includes('unique identification') ||
-    lowerOcr.includes('election commission') ||
-    lowerOcr.includes('driving license') ||
-    lowerOcr.includes('income tax department') ||
-    result.document_title?.toLowerCase()?.includes('aadhaar') ||
-    result.document_title?.toLowerCase()?.includes('pan card') ||
-    result.final_category === 'Identity Documents'
-
-  const isNonFinancial =
-    lowerFileName.includes('plan') ||
-    lowerFileName.includes('roadmap') ||
-    lowerFileName.includes('matrix') ||
-    lowerFileName.includes('brochure') ||
-    lowerFileName.includes('guide') ||
-    lowerFileName.includes('profile') ||
-    lowerFileName.includes('result') ||
-    lowerFileName.includes('marksheet') ||
-    lowerFileName.includes('bgc')
-
-  // 1. Align final category dynamically based on clear filename/OCR keywords
-  if (isQuestionPaperOrExam) {
-    finalCategory = 'Education'
-  } else if (isResumeFile) {
-    finalCategory = 'Employment'
-  } else if (isJobDescription) {
-    finalCategory = 'Employment'
-  } else if (isMarksheetOrResult) {
-    finalCategory = 'Education'
-  } else if (isInterviewGuide || isLectureNotesOrStudy) {
-    finalCategory = 'Education'
-  } else if (isTravel) {
-    finalCategory = 'Travel'
-  } else if (isCertificate) {
-    finalCategory = 'Certificates'
-  } else if (isCoverLetterOrContract) {
-    finalCategory = 'Employment'
-  } else if (isPersonalOnboarding) {
-    finalCategory = 'Employment'
-  } else if (isIdentityDocument) {
-    finalCategory = 'Identity Documents'
-  } else if (!isNonFinancial && (lowerFileName.includes('receipt') || lowerOcr.includes('receipt'))) {
-    finalCategory = 'Receipts'
-  } else if (!isNonFinancial && (lowerFileName.includes('invoice') || lowerOcr.includes('invoice'))) {
-    finalCategory = 'Invoices'
-  } else if (!isNonFinancial && (lowerFileName.includes('bill') || lowerOcr.includes('bill statement'))) {
-    finalCategory = 'Bills'
-  } else if (isRegistrationOrAcademic) {
-    finalCategory = 'Education'
+    finalCategory = matchedCategory || 'Miscellaneous'
   }
 
-  if (isNonFinancial && ['receipts', 'invoices', 'bills'].includes(finalCategory.toLowerCase())) {
-    finalCategory = 'Miscellaneous'
+  // Ensure suggested folder is not empty or generic uncategorized
+  if (!suggestedFolder || suggestedFolder.toLowerCase() === 'uncategorized') {
+    suggestedFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
   }
 
-  // 2. Map category to standard default folder name
-  let defaultFolder = CATEGORY_DEFAULT_FOLDERS[finalCategory]
-
-  const getDynamicFolder = (fallback: string, allowNewFolder = false) => {
-    const primary = result.primary_entity || ''
-    if (primary) {
-      // First try exact/substring matching via matchExistingFolder
-      const matched = matchExistingFolder(primary, existingFolders, fileName)
-      const exists = existingFolders.some(f => f.trim().toLowerCase() === matched.toLowerCase())
-      if (exists) return matched
-
-      // Then try Levenshtein fuzzy match for OCR typos
-      const lowerPrimary = primary.toLowerCase()
-      const genericFolders = ['uncategorized', 'miscellaneous', 'personal', 'photos', 'resume', 'resumes', 'job descriptions', 'job description', 'marksheets', 'results', 'certificates', 'receipts', 'utility bills', 'government ids', 'travel']
-      for (const folder of existingFolders) {
-        const lf = folder.trim().toLowerCase()
-        if (genericFolders.includes(lf)) continue
-        const a = lowerPrimary, b = lf
-        const tmp: number[][] = []
-        for (let i = 0; i <= a.length; i++) tmp[i] = [i]
-        for (let j = 0; j <= b.length; j++) tmp[0][j] = j
-        for (let i = 1; i <= a.length; i++) {
-          for (let j = 1; j <= b.length; j++) {
-            tmp[i][j] = Math.min(tmp[i-1][j]+1, tmp[i][j-1]+1, tmp[i-1][j-1] + (a[i-1]===b[j-1]?0:1))
-          }
-        }
-        const dist = tmp[a.length][b.length]
-        const maxAllowed = Math.min(2, Math.floor(Math.max(a.length, b.length) / 4))
-        if (dist <= maxAllowed && dist > 0) {
-          console.log(`Dynamic folder Levenshtein match: "${primary}" -> "${folder}" (distance: ${dist})`)
-          return folder
-        }
-      }
-
-      if (allowNewFolder) {
-        return primary.split(/\s+/)
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-          .join(' ')
-      }
-    }
-    return fallback
+  // If document title is missing, generate a clean default from filename or folder
+  if (!documentTitle || documentTitle.toLowerCase() === 'unknown' || documentTitle.toLowerCase() === 'null') {
+    documentTitle = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ') : suggestedFolder
   }
 
-  // Custom overrides for specific subtypes to prevent misrouting
-  if (isQuestionPaperOrExam) {
-    defaultFolder = existingFolders.find(f => ['education', 'academic', 'exams', 'question papers'].includes(f.trim().toLowerCase())) || 'Education'
-    finalCategory = 'Education'
-  } else if (isResumeFile) {
-    defaultFolder = existingFolders.find(f => ['resume', 'resumes'].includes(f.trim().toLowerCase())) || 'Resume'
-    finalCategory = 'Employment'
-    if (!documentTitle || documentTitle === 'unknown' || documentTitle.toLowerCase() === 'resume') {
-      const name = result.primary_entity || 'Candidate'
-      documentTitle = `${name} Resume`
-    }
-  } else if (isJobDescription) {
-    defaultFolder = existingFolders.find(f => ['job descriptions', 'job description'].includes(f.trim().toLowerCase())) || 'Job Descriptions'
-    finalCategory = 'Employment'
-  } else if (isMarksheetOrResult) {
-    defaultFolder = existingFolders.find(f => ['results', 'marksheets'].includes(f.trim().toLowerCase())) || 'Results'
-    finalCategory = 'Education'
-  } else if (isCoverLetter) {
-    defaultFolder = existingFolders.find(f => ['cover letters', 'cover letter'].includes(f.trim().toLowerCase())) || 'Cover Letters'
-    finalCategory = 'Employment'
-  } else if (isInterviewGuide) {
-    defaultFolder = existingFolders.find(f => ['study material', 'interview prep', 'interview preparation', 'education'].includes(f.trim().toLowerCase())) || 'Study Material'
-    finalCategory = 'Education'
-  } else if (isLectureNotesOrStudy) {
-    defaultFolder = existingFolders.find(f => ['education', 'study material', 'notes'].includes(f.trim().toLowerCase())) || 'Education'
-    finalCategory = 'Education'
-  } else if (isTravel) {
-    defaultFolder = existingFolders.find(f => f.trim().toLowerCase() === 'travel') || 'Travel'
-    finalCategory = 'Travel'
-  } else if (isCertificate) {
-    defaultFolder = existingFolders.find(f => ['certificates', 'certificate'].includes(f.trim().toLowerCase())) || getDynamicFolder('Certificates', false)
-    finalCategory = 'Certificates'
-  } else if (finalCategory === 'Employment') {
-    defaultFolder = getDynamicFolder('Employment', true)
-  } else if (finalCategory === 'Education') {
-    defaultFolder = existingFolders.find(f => ['education', 'academic'].includes(f.trim().toLowerCase())) || 'Education'
-  } else if (finalCategory === 'Identity Documents') {
-    defaultFolder = getDynamicFolder('Government IDs', false)
-  }
-
-  if (!defaultFolder) {
-    const genericFallback = CATEGORY_DEFAULT_FOLDERS[finalCategory] || 'Miscellaneous'
-    defaultFolder = getDynamicFolder(genericFallback, true)
-  }
-
-  if (defaultFolder) {
-    const isGeneric = ['uncategorized', 'miscellaneous', 'personal', 'photos'].includes(suggestedFolder.toLowerCase())
-    const forceOverride =
-      isGeneric ||
-      isQuestionPaperOrExam ||
-      isResumeFile ||
-      isJobDescription ||
-      isMarksheetOrResult ||
-      isLectureNotesOrStudy ||
-      isTravel ||
-      isCertificate ||
-      isCoverLetter ||
-      isInterviewGuide ||
-      isCoverLetterOrContract ||
-      isPersonalOnboarding ||
-      isRegistrationOrAcademic ||
-      lowerFileName.includes('receipt') ||
-      (finalCategory === 'Receipts' && (lowerOcr.includes('tax receipt') || lowerOcr.includes('payment receipt'))) ||
-      lowerFileName.includes('invoice') ||
-      lowerFileName.includes('bill') ||
-      (suggestedFolder.toLowerCase() === 'resume' && !isResumeFile) ||
-      (suggestedFolder.toLowerCase() === 'marksheets' && !isMarksheetOrResult) ||
-      (finalCategory === 'Identity Documents' && suggestedFolder.toLowerCase() !== defaultFolder.toLowerCase()) ||
-      (!!result.primary_entity && isGeneric && suggestedFolder.toLowerCase() !== defaultFolder.toLowerCase())
-
-    if (forceOverride) {
-      suggestedFolder = defaultFolder
-    }
-  }
-
-  // 3. Normalize suggestedFolder against existing folders (handles exact match, filename match with transactional guards, and fuzzy match)
+  // Normalize suggestedFolder against user's existing folders (exact, plural/singular, or category synonym)
   suggestedFolder = matchExistingFolder(suggestedFolder, existingFolders, fileName)
 
   const isNewFolder = !existingFolders.some(f => f.trim().toLowerCase() === suggestedFolder.toLowerCase())
