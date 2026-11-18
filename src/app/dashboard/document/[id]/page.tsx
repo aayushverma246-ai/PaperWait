@@ -62,7 +62,7 @@ export default function DocumentPage({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const previewUrlRef = useRef<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [previewLoading, setPreviewLoading] = useState(true)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState<'preview' | 'text'>('preview')
   const [isMobile, setIsMobile] = useState(false)
@@ -117,7 +117,7 @@ export default function DocumentPage({
     const fileExt = (document.file_name.split('.').pop() || '').toLowerCase()
     
     if (fileExt === 'csv') {
-      setPreviewLoading(true)
+      if (csvData) return
       fetch(`/api/documents/${document.id}`)
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch')
@@ -156,7 +156,7 @@ export default function DocumentPage({
           setPreviewLoading(false)
         })
     } else if (fileExt === 'txt') {
-      setPreviewLoading(true)
+      if (txtContent !== null) return
       fetch(`/api/documents/${document.id}`)
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch')
@@ -177,7 +177,7 @@ export default function DocumentPage({
       setCsvData(null)
       setTxtContent(null)
     }
-  }, [document])
+  }, [document, csvData, txtContent])
 
   useEffect(() => {
     return () => {
@@ -204,7 +204,7 @@ export default function DocumentPage({
   })
 
   const loadData = useCallback(async () => {
-    setPreviewLoading(true)
+    setPreviewLoading(false)
     setIframeLoaded(false)
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('app-loading-start', {
@@ -239,6 +239,7 @@ export default function DocumentPage({
 
       const isPdf = docData.file_type === 'application/pdf'
       const isImg = docData.file_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(docData.file_name)
+      const fileExt = (docData.file_name.split('.').pop() || '').toLowerCase()
       
       const displayPreviewPath = isImg
         ? docData.storage_path
@@ -258,37 +259,84 @@ export default function DocumentPage({
       setSignedUrl(urlResult.data.signedUrl)
 
       const previewUrlData = previewUrlResult.data
+      const targetPreviewUrl = previewUrlData?.signedUrl || (isImg ? urlResult.data.signedUrl : null)
 
-      if (previewUrlData?.signedUrl) {
-        if (!isImg) {
-          // For non-media files and PDFs, set the remote signedUrl of the preview card directly as visual placeholder
-          setPreviewUrl(previewUrlData.signedUrl)
-        } else {
-          // Fetch preview blob and create local Object URL to avoid rendering delays for image media files
-          try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 6000) // max 6s fetch
-            const res = await fetch(previewUrlData.signedUrl, { signal: controller.signal })
-            clearTimeout(timeoutId)
-            if (!res.ok) throw new Error('Blob fetch failed')
-            const blob = await res.blob()
-            const localUrl = URL.createObjectURL(blob)
-            
-            if (previewUrlRef.current) {
-              URL.revokeObjectURL(previewUrlRef.current)
+      // Step 3: Preload preview image / text content before Velocity Loader finishes
+      const preloadTasks: Promise<any>[] = []
+
+      if (targetPreviewUrl) {
+        setPreviewUrl(targetPreviewUrl)
+        preloadTasks.push(
+          new Promise<void>((resolve) => {
+            const img = new Image()
+            img.src = targetPreviewUrl
+            const timer = setTimeout(resolve, 3000)
+            img.onload = async () => {
+              try {
+                if (img.decode) await img.decode()
+              } catch (e) {}
+              clearTimeout(timer)
+              resolve()
             }
-            previewUrlRef.current = localUrl
-            setPreviewUrl(localUrl)
-          } catch (preloadErr) {
-            console.warn('Preload/Blob fetch failed, falling back to signedUrl:', preloadErr)
-            setPreviewUrl(previewUrlData.signedUrl)
-          }
-        }
-      } else {
-        if (isPdf || isImg) {
-          setPreviewLoading(false)
+            img.onerror = () => {
+              clearTimeout(timer)
+              resolve()
+            }
+          })
+        )
+      }
+
+      if (fileExt === 'csv') {
+        preloadTasks.push(
+          fetch(`/api/documents/${docData.id}`)
+            .then(res => res.ok ? res.text() : '')
+            .then(text => {
+              if (text) {
+                const lines = text.split(/\r?\n/)
+                const parsed = lines
+                  .map(line => {
+                    const cells: string[] = []
+                    let current = ''
+                    let inQuotes = false
+                    for (let i = 0; i < line.length; i++) {
+                      const char = line[i]
+                      if (char === '"') inQuotes = !inQuotes
+                      else if (char === ',' && !inQuotes) {
+                        cells.push(current.trim())
+                        current = ''
+                      } else {
+                        current += char
+                      }
+                    }
+                    cells.push(current.trim())
+                    return cells
+                  })
+                  .filter(row => row.some(cell => cell.length > 0))
+                setCsvData(parsed)
+              }
+            })
+            .catch(() => {})
+        )
+      } else if (fileExt === 'txt') {
+        preloadTasks.push(
+          fetch(`/api/documents/${docData.id}`)
+            .then(res => res.ok ? res.text() : '')
+            .then(text => {
+              if (text) setTxtContent(text)
+            })
+            .catch(() => {})
+        )
+      }
+
+      if (preloadTasks.length > 0) {
+        try {
+          await Promise.all(preloadTasks)
+        } catch (e) {
+          // ignore
         }
       }
+
+      setPreviewLoading(false)
 
     } catch (err) {
       console.error('Error loading document details:', err)
@@ -752,14 +800,6 @@ export default function DocumentPage({
           <div className="flex-1 bg-zinc-950 flex min-h-0 relative">
             {activeTab === 'preview' ? (
               <div className="flex-1 flex items-center justify-center p-2 min-h-0 relative">
-                {previewLoading && (isPdf || isImg) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-10 space-y-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                      Rendering Document Preview...
-                    </span>
-                  </div>
-                )}
                 {pdfViewerUrl ? (
                   isPdf ? (
                     isMobile ? (
@@ -770,7 +810,7 @@ export default function DocumentPage({
                             <img
                               src={previewUrl}
                               alt={`${document.file_name} Preview Placeholder`}
-                              className="max-w-full max-h-full object-contain rounded-lg shadow-md opacity-40 select-none pointer-events-none"
+                              className="max-w-full max-h-full object-contain rounded-lg shadow-md select-none pointer-events-none"
                             />
                           </div>
                         )}
@@ -790,17 +830,26 @@ export default function DocumentPage({
                         />
                       </div>
                     ) : (
-                      /* Desktop PDF Viewer using high-performance <object> element */
-                      <div className="w-full h-full overflow-y-auto -webkit-overflow-scrolling-touch">
+                      /* Desktop PDF Viewer using high-performance <object> element with immediate preview underlay */
+                      <div className="w-full h-full overflow-y-auto -webkit-overflow-scrolling-touch relative">
+                        {previewUrl && (
+                          <div className="absolute inset-0 flex items-center justify-center p-2 bg-zinc-950/60 z-0">
+                            <img
+                              src={previewUrl}
+                              alt={`${document.file_name} Preview Placeholder`}
+                              className="max-w-full max-h-full object-contain rounded-lg shadow-md select-none pointer-events-none"
+                            />
+                          </div>
+                        )}
                         <object
                           data={pdfViewerUrl ?? undefined}
                           type="application/pdf"
-                          className="w-full h-full min-h-[480px] rounded-lg border-0"
+                          className="w-full h-full min-h-[480px] rounded-lg border-0 relative z-10 bg-transparent"
                           onLoad={() => setPreviewLoading(false)}
                         >
                           <iframe
                             src={iframeUrl}
-                            className="w-full h-full rounded-lg border-0"
+                            className="w-full h-full rounded-lg border-0 relative z-10 bg-transparent"
                             title="PDF Preview"
                             onLoad={() => setPreviewLoading(false)}
                           />
@@ -843,12 +892,6 @@ export default function DocumentPage({
                                   />
                                 </div>
                               )}
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-10 space-y-3">
-                                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                                  Loading Spreadsheet Data...
-                                </span>
-                              </div>
                             </div>
                           )
                         }
@@ -877,12 +920,6 @@ export default function DocumentPage({
                                   />
                                 </div>
                               )}
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-10 space-y-3">
-                                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                                  Loading Text Content...
-                                </span>
-                              </div>
                             </div>
                           )
                         }
@@ -897,19 +934,11 @@ export default function DocumentPage({
                               <img
                                 src={previewUrl}
                                 alt={`${document.file_name} Preview Placeholder`}
-                                className="max-w-full max-h-full object-contain rounded-lg shadow-md opacity-40 select-none pointer-events-none"
+                                className="max-w-full max-h-full object-contain rounded-lg shadow-md opacity-80 select-none pointer-events-none"
                               />
                             </div>
                           )}
 
-                          {previewLoading && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-10 space-y-3">
-                              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                                Loading Interactive Viewer...
-                              </span>
-                            </div>
-                          )}
                           {signedUrl ? (
                             <div className="w-full h-full overflow-hidden relative rounded-lg">
                               <iframe
