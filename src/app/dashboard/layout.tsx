@@ -129,7 +129,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Floating Upload Progress Widget */}
       {showFloatingWidget && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 px-4 py-3.5 bg-zinc-950/90 border border-zinc-800/80 backdrop-blur-md rounded-2xl shadow-2xl animate-fade-in shadow-indigo-500/10 hover:border-zinc-750 transition-all">
+        <div className="fixed bottom-6 left-4 sm:left-auto sm:right-24 z-40 flex items-center space-x-3 px-4 py-3.5 bg-zinc-950/90 border border-zinc-800/80 backdrop-blur-md rounded-2xl shadow-2xl animate-fade-in shadow-indigo-500/10 hover:border-zinc-750 transition-all">
           <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
           <span className="text-xs font-semibold text-zinc-200">
             Processing {activeUploadsCount} document{activeUploadsCount > 1 ? 's' : ''} in background...

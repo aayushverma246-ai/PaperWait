@@ -133,7 +133,10 @@ export default function DocumentChat() {
   useEffect(() => {
     if (isOpen) {
       fetchIndexStatus()
-      inputRef.current?.focus()
+      // Only autofocus on desktop (width >= 640px) to prevent virtual keyboard jarring popup on mobile
+      if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+        inputRef.current?.focus()
+      }
     } else {
       setShowDeleteConfirm(false)
     }
@@ -195,6 +198,9 @@ export default function DocumentChat() {
       localStorage.setItem(`paperwait_chat_history_${userId}`, JSON.stringify(updatedMessages))
     }
     setInput('')
+    if (inputRef.current) {
+      inputRef.current.style.height = '42px'
+    }
     setLoading(true)
 
     try {
@@ -290,12 +296,13 @@ export default function DocumentChat() {
       {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-xl ${
+        className={`fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-xl ${
           isOpen
             ? 'hidden sm:flex bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 shadow-zinc-900/50'
-            : 'flex bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-indigo-500/30 hover:shadow-indigo-500/40 hover:scale-105'
+            : 'flex bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-indigo-500/30 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95'
         }`}
         title={isOpen ? 'Close AI Chat' : 'Open AI Chat'}
+        aria-label={isOpen ? 'Close AI Chat' : 'Open AI Chat'}
       >
         {isOpen ? (
           <X className="w-5 h-5 text-zinc-300" />
@@ -304,63 +311,93 @@ export default function DocumentChat() {
         )}
       </button>
 
-      {/* Chat Panel - Full responsive bottom sheet on mobile, floating card on desktop */}
+      {/* Mobile Backdrop Overlay - closes sheet on outside tap */}
       {isOpen && (
-        <div className="fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-24 sm:right-6 z-50 w-full sm:w-[480px] h-[92vh] sm:h-[min(660px,calc(100vh-7rem))] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-scale-up relative">
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 sm:hidden transition-opacity animate-fade-in"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Chat Panel - Full responsive bottom sheet on mobile (90dvh), floating card on desktop */}
+      {isOpen && (
+        <div
+          className="fixed inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-24 sm:right-6 z-50 w-full sm:w-[460px] md:w-[480px] h-[90dvh] sm:h-[min(660px,calc(100vh-7rem))] max-h-[100dvh] bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-slide-up sm:animate-scale-up relative"
+          role="dialog"
+          aria-modal="true"
+          aria-label="PaperWait AI Assistant"
+        >
           
-          {/* Mobile Sheet Drag Indicator */}
-          <div className="w-10 h-1 bg-zinc-700/80 rounded-full mx-auto mt-2 mb-0.5 sm:hidden flex-shrink-0" />
+          {/* Mobile Sheet Drag Handle / Dismiss bar */}
+          <div
+            className="w-full pt-3 pb-1 flex justify-center sm:hidden flex-shrink-0 cursor-pointer active:opacity-60 transition-opacity"
+            onClick={() => setIsOpen(false)}
+            title="Tap to close"
+          >
+            <div className="w-12 h-1.5 bg-zinc-700/80 rounded-full" />
+          </div>
 
           {/* Header with Official PaperWait Logo & Controls */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-sm flex-shrink-0">
-            <div className="flex items-center space-x-2.5">
+            <div className="flex items-center space-x-2.5 min-w-0">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
                 <FileText className="w-4.5 h-4.5 text-white" />
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
-                  <span>PaperWait AI</span>
-                  <span className="px-1.5 py-0.2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-semibold rounded-full">
+              <div className="min-w-0">
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-white truncate">PaperWait AI</h3>
+                  <span className="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-semibold rounded-full flex-shrink-0">
                     Grounded RAG
                   </span>
-                </h3>
-                <p className="text-[10px] text-zinc-400 font-medium">Ask questions across your documents</p>
+                </div>
+                <p className="text-[10px] text-zinc-400 font-medium truncate">Ask questions across your documents</p>
               </div>
             </div>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
               {messages.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer active:scale-95"
                   title="Clear conversation history"
                   aria-label="Clear conversation history"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer"
+                className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-all cursor-pointer active:scale-95"
                 title="Close Chat"
                 aria-label="Close Chat"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4.5 h-4.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
 
           {/* Delete Confirmation Modal Overlay */}
           {showDeleteConfirm && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-2xl max-w-[340px] w-full text-center space-y-4 animate-scale-up">
+            <div
+              className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowDeleteConfirm(false)
+              }}
+            >
+              <div
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-2xl max-w-[340px] w-full text-center space-y-4 animate-scale-up"
+                role="alertdialog"
+                aria-labelledby="clear-chat-title"
+                aria-describedby="clear-chat-desc"
+              >
                 <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto shadow-inner">
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Clear Conversation?</h4>
-                  <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                  <h4 id="clear-chat-title" className="text-sm font-bold text-white">Clear Conversation?</h4>
+                  <p id="clear-chat-desc" className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
                     This will permanently delete your chat history with PaperWait AI on this device and the server. This action cannot be undone.
                   </p>
                 </div>
@@ -368,14 +405,14 @@ export default function DocumentChat() {
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 bg-zinc-800 hover:bg-zinc-750 hover:text-white border border-zinc-700/60 transition-all cursor-pointer"
+                    className="min-h-[42px] px-3.5 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 bg-zinc-800 hover:bg-zinc-750 hover:text-white border border-zinc-700/60 transition-all cursor-pointer active:scale-95"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={clearChat}
-                    className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                    className="min-h-[42px] px-3.5 py-2.5 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center space-x-1.5 active:scale-95"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Clear Chat</span>
@@ -410,15 +447,15 @@ export default function DocumentChat() {
           )}
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+          <div className="flex-1 overflow-y-auto px-3.5 sm:px-4 py-4 space-y-4 overscroll-contain scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
             {messages.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/10">
-                  <FileText className="w-7 h-7 text-indigo-400" />
+              <div className="flex flex-col items-center justify-center h-full text-center py-6 sm:py-8">
+                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-violet-600/20 border border-indigo-500/30 flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-indigo-500/10">
+                  <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-400" />
                 </div>
                 <h4 className="text-sm font-bold text-zinc-300 mb-1">Ask about your documents</h4>
-                <p className="text-[11px] text-zinc-400 max-w-[280px] mb-6 leading-relaxed">
+                <p className="text-[11px] text-zinc-400 max-w-[280px] mb-5 sm:mb-6 leading-relaxed">
                   I can search through your uploaded documents and answer questions with verifiable citations.
                 </p>
 
@@ -429,9 +466,12 @@ export default function DocumentChat() {
                       key={i}
                       onClick={() => {
                         setInput(q)
+                        if (inputRef.current) {
+                          inputRef.current.style.height = 'auto'
+                        }
                         inputRef.current?.focus()
                       }}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 bg-zinc-900/60 border border-zinc-850 rounded-xl text-left text-xs text-zinc-300 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 transition-all cursor-pointer group shadow-xs"
+                      className="w-full min-h-[40px] flex items-center justify-between px-3.5 py-2.5 bg-zinc-900/60 border border-zinc-850 rounded-xl text-left text-xs text-zinc-300 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 active:scale-[0.99] transition-all cursor-pointer group shadow-xs"
                     >
                       <span className="truncate">{q}</span>
                       <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-indigo-400 transition-colors flex-shrink-0 ml-2" />
@@ -446,8 +486,8 @@ export default function DocumentChat() {
                   {msg.role === 'user' ? (
                     /* User Bubble */
                     <div className="flex justify-end">
-                      <div className="max-w-[88%] sm:max-w-[85%]">
-                        <div className="px-4 py-2.5 rounded-2xl rounded-br-xs bg-gradient-to-tr from-indigo-600 to-violet-600 text-white text-xs sm:text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap break-words font-normal">
+                      <div className="max-w-[85%] sm:max-w-[82%]">
+                        <div className="px-3.5 sm:px-4 py-2.5 rounded-2xl rounded-br-xs bg-gradient-to-tr from-indigo-600 to-violet-600 text-white text-xs sm:text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap break-words font-normal">
                           {msg.content}
                         </div>
                       </div>
@@ -458,13 +498,13 @@ export default function DocumentChat() {
                       <div className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-indigo-400">
                         <Sparkles className="w-3.5 h-3.5" />
                       </div>
-                      <div className="flex-1 max-w-[94%] sm:max-w-[92%] min-w-0">
-                        <div className={`px-4 py-3 rounded-2xl rounded-tl-xs text-xs sm:text-[13px] leading-relaxed shadow-sm ${
+                      <div className="flex-1 min-w-0">
+                        <div className={`px-3.5 sm:px-4 py-3 rounded-2xl rounded-tl-xs text-xs sm:text-[13px] leading-relaxed shadow-sm ${
                           msg.error
                             ? 'bg-red-950/30 border border-red-900/40 text-red-300'
                             : 'bg-zinc-900/95 border border-zinc-800/80 text-zinc-200'
                         }`}>
-                          <div className="prose-chat">
+                          <div className="break-words [overflow-wrap:anywhere] space-y-1">
                             {formatMarkdown(msg.content)}
                           </div>
                         </div>
@@ -475,7 +515,7 @@ export default function DocumentChat() {
                           <button
                             type="button"
                             onClick={() => handleCopyMessage(msg.content, idx)}
-                            className="inline-flex items-center space-x-1 py-0.5 px-1.5 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                            className="inline-flex items-center space-x-1 py-1 px-2 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 active:scale-95 transition-all cursor-pointer"
                             title="Copy answer to clipboard"
                           >
                             {copiedIdx === idx ? (
@@ -494,7 +534,7 @@ export default function DocumentChat() {
 
                         {/* Verified Document Sources */}
                         {msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-zinc-800/60 space-y-1.5">
+                          <div className="mt-2.5 pt-2 border-t border-zinc-800/60 space-y-1.5">
                             <p className="text-[9px] text-zinc-500 font-semibold uppercase tracking-wider px-0.5 flex items-center space-x-1">
                               <FileText className="w-2.5 h-2.5 text-indigo-400" />
                               <span>Verified Citations ({msg.sources.length})</span>
@@ -508,9 +548,12 @@ export default function DocumentChat() {
                                       ? `/dashboard/document/${source.documentId}?page=${source.pageNumber}`
                                       : `/dashboard/document/${source.documentId}`
                                   }
-                                  className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 rounded-lg transition-all group"
+                                  className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 active:scale-95 rounded-lg transition-all group min-h-[32px]"
                                   onClick={() => {
                                     if (typeof window !== 'undefined') {
+                                      if (window.innerWidth < 640) {
+                                        setIsOpen(false)
+                                      }
                                       window.dispatchEvent(new CustomEvent('app-loading-start', {
                                         detail: { title: 'Loading', subtitle: 'Decrypting secure document contents...' }
                                       }))
@@ -518,7 +561,7 @@ export default function DocumentChat() {
                                   }}
                                 >
                                   <FileText className="w-3 h-3 text-indigo-400 flex-shrink-0" />
-                                  <span className="text-[11px] text-zinc-300 group-hover:text-white truncate max-w-[170px] transition-colors font-medium">
+                                  <span className="text-[11px] text-zinc-300 group-hover:text-white truncate max-w-[150px] sm:max-w-[180px] transition-colors font-medium">
                                     {source.fileName}
                                   </span>
                                   {source.pageNumber && (
@@ -556,25 +599,33 @@ export default function DocumentChat() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input area - Mobile optimized */}
-          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur-xs p-3 pb-5 sm:pb-3">
+          {/* Input area - Mobile keyboard safe & Auto-growing */}
+          <div className="flex-shrink-0 border-t border-zinc-800/80 bg-zinc-900/80 backdrop-blur-xs p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3">
             <div className="flex items-end space-x-2">
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  e.target.style.height = 'auto'
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
+                }}
                 onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  setTimeout(scrollToBottom, 250)
+                }}
                 placeholder="Ask about your documents..."
                 rows={1}
-                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-sm rounded-xl px-3.5 py-2.5 resize-none transition-all max-h-[120px] overflow-y-auto leading-normal font-normal"
+                className="flex-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-zinc-100 placeholder-zinc-500 text-base sm:text-sm rounded-xl px-3.5 py-2.5 resize-none transition-[border-color,box-shadow] max-h-[120px] overflow-y-auto leading-normal font-normal"
                 style={{ minHeight: '42px' }}
                 disabled={loading}
               />
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || loading}
-                className="flex-shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-md shadow-indigo-500/20"
+                className="flex-shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-md shadow-indigo-500/20"
                 title="Send message"
+                aria-label="Send message"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -635,7 +686,7 @@ function formatMarkdown(text: string): React.ReactNode {
           elements.push(
             <div
               key={`table-${i}`}
-              className="my-3 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-md scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
+              className="my-3 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 shadow-md scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent overscroll-x-contain [-webkit-overflow-scrolling:touch]"
             >
               <table className="min-w-full text-left text-xs border-collapse">
                 <thead>
@@ -712,6 +763,16 @@ function formatMarkdown(text: string): React.ReactNode {
     }
 
     // 4. Headings
+    if (trimmed.startsWith('#### ')) {
+      elements.push(
+        <h4 key={`h4-${i}`} className="text-xs font-bold text-zinc-200 mt-2 mb-1 flex items-center space-x-1.5">
+          <span className="w-1 h-1 rounded-full bg-indigo-400 inline-block flex-shrink-0" />
+          <span>{processInline(trimmed.substring(5))}</span>
+        </h4>
+      )
+      i++
+      continue
+    }
     if (trimmed.startsWith('### ')) {
       elements.push(
         <h3 key={`h3-${i}`} className="text-[13px] font-bold text-zinc-100 mt-2.5 mb-1 flex items-center space-x-1.5">
@@ -779,9 +840,9 @@ function formatMarkdown(text: string): React.ReactNode {
       continue
     }
 
-    // 8. Bullet List (e.g. "- Item", "• Item", "* Item")
-    if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
-      const content = trimmed.replace(/^[-•*]\s+/, '')
+    // 8. Bullet List (e.g. "- Item", "• Item", "* Item", "+ Item")
+    if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ') || trimmed.startsWith('+ ')) {
+      const content = trimmed.replace(/^[-•*+]\s+/, '')
       const indentCount = rawLine.match(/^\s*/)?.[0].length || 0
       const indentClass = indentCount >= 4 ? 'ml-6' : indentCount >= 2 ? 'ml-3' : 'ml-0.5'
 
@@ -824,8 +885,8 @@ function processInline(text: string): React.ReactNode {
     const italicMatch = remaining.match(/(?<!\*)\*([^*]+?)\*(?!\*)|(?<!_)_([^_]+?)_(?!_)/)
     // 3. Inline Code (`code`)
     const codeMatch = remaining.match(/`(.+?)`/)
-    // 4. Document Citations: [Document: filename.pdf, Page N] or [From "filename.pdf", Page N] or [Document: filename.pdf]
-    const docMatch = remaining.match(/\[(?:Document|From)(?::\s*|\s+)"?([^\]",]+)"?(?:,\s*(?:Page\s*)?(\d+))?\]/i)
+    // 4. Document Citations: [Document: filename.pdf, Page N] or [From "filename.pdf", Page N] or [Source: filename.pdf]
+    const docMatch = remaining.match(/\[(?:Document|Doc|Source|From)(?::\s*|\s+)"?([^\]",]+)"?(?:,\s*(?:Page\s*)?(\d+))?\]/i)
     // 5. Markdown Links: [Title](url)
     const linkMatch = remaining.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/)
 

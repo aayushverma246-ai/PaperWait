@@ -34,12 +34,15 @@
   - **Dynamic Racing Protocol**: Fast path resolves early strictly for simple financial documents (`Receipts`, `Invoices`, `Bills`, `Utilities`, `Tax Documents`) with high confidence ($\ge 0.85$). Complex contextual documents (resumes, job postings, exams, admit cards, government IDs) await deep reasoning to eliminate misclassifications without brittle hardcoding.
   - **Deterministic Semantic Routing & Cross-Category Guards**: Resumes route to `Resume`, JDs to `Job Descriptions`, exams/admit cards/lecture modules to `Education`, government IDs to `Government IDs`, marksheets to `Results`, and vehicle/road tax slips to `Transport Department Jharkhand`. Cross-category guards ensure non-employment documents are never placed in `Job Descriptions` or `Resume`.
 
-- 💬 **Grounded RAG AI Document Assistant**:
+- 💬 **Grounded RAG AI Document Assistant & Mobile-First Interface**:
   - Conversational Q&A grounded strictly in the user's private document vault.
-  - **Rich Markdown Formatting**: Beautiful native formatting for comparison tables, key-value bullet cards, numbered lists, blockquotes, code blocks with syntax tags, and clickable citations.
-  - **Accidental Deletion Protection**: Dedicated confirmation dialog modal before purging conversation history on client and server.
+  - **Mobile-First Responsive Bottom Sheet**: Dynamically switches between an elegant desktop floating panel (`w-[480px]`) and an iOS/Android native-feeling bottom sheet drawer (`90dvh`, rounded top sheet `rounded-t-3xl`, drag handle bar, touch-to-dismiss backdrop, and hardware safe-area insets `env(safe-area-inset-bottom)`).
+  - **Virtual Keyboard & Input Polish**: Prevents iOS Safari auto-zoom via responsive font sizing (`text-base sm:text-sm`), features an auto-growing textarea that expands dynamically up to 120px with smooth momentum scrolling, and maintains viewport focus without jarring layout shifts.
+  - **Collision Prevention & Touch Target Optimization**: Relocates background upload indicators to prevent overlapping the chat FAB; incorporates generous WCAG-compliant touch targets ($\ge 44\times 44\text{px}$) for close, clear, copy, and send actions.
+  - **Rich Markdown Formatting**: Beautiful native formatting for comparison tables with horizontal momentum scrolling, key-value bullet cards, numbered lists, blockquotes, code blocks with syntax tags and one-click copy, and interactive citation badges.
+  - **Accidental Deletion Protection**: Dedicated confirmation dialog modal before purging conversation history on client and server with outside backdrop dismissal.
   - **One-Click Answer Copy**: Instant clipboard copy with visual feedback for generated summaries and document comparisons.
-  - **Verifiable Citations**: Direct links with page numbers (e.g., `[Document: tax_return_2025.pdf, Page 2]`) navigating straight to the decrypted page in the document viewer.
+  - **Verifiable Citations**: Direct links with page numbers (e.g., `[Document: tax_return_2025.pdf, Page 2]`) navigating straight to the decrypted page in the document viewer, automatically minimizing the mobile drawer.
   - **Dual-Model Inference**: High-speed primary inference via Groq (`openai/gpt-oss-120b`) with automated failover to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`).
   - **Dual-Layer Persistence**: Synchronized chat history in Supabase (`public.chat_messages`) with Row Level Security (RLS) coupled with zero-latency localStorage client caching.
 
@@ -102,7 +105,7 @@ graph TD
     
     subgraph Dual-Model Racing Classification
         LLMRoute --> FastPath[Fast Path: Groq GPT-OSS 20B / Nemotron budget=0]
-        LLMRoute --> DeepPath[Deep Reasoning: Nemotron-3-Nano budget=128]
+        LLMRoute --> DeepPath[Deep Reasoning: Nemotron-3-Nano budget=512]
         
         FastPath --> FastCheck{Simple Financial & Conf >= 0.90?}
         FastCheck -->|Yes| EarlyResolve[Early Resolve Winner]
@@ -172,7 +175,7 @@ PaperWait combines the speed of ultra-low-latency transactional inference with t
 ┌──────────────────────────────┐          ┌──────────────────────────────┐
 │          Fast Path           │          │     Deep Reasoning Path      │
 │ Groq GPT-OSS 20B             │          │ NVIDIA Nemotron-3-Nano Omni   │
-│ (or Nemotron budget=0)       │          │ (reasoning_budget: 128)      │
+│ (or Nemotron budget=0)       │          │ (reasoning_budget: 512)       │
 │ Latency: ~500ms – 1.2s       │          │ Latency: ~3.2s – 4.5s        │
 └──────────────┬───────────────┘          └──────────────┬───────────────┘
                │                                         │
