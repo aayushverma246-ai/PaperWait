@@ -193,18 +193,21 @@ function splitTextIntoChunks(
 
     chunks.push(text.substring(start, end))
 
-    // Move start with overlap
-    start = end - overlap
-    if (start >= text.length) break
+    // If this chunk reached the end of the text, we are completely done
+    if (end >= text.length) {
+      break
+    }
+
+    // Move start with overlap, ensuring strict forward progress
+    const nextStart = end - overlap
+    if (nextStart <= start) {
+      start = end
+    } else {
+      start = nextStart
+    }
+
     // Avoid tiny final chunks
     if (text.length - start < MIN_CHUNK_SIZE) {
-      // Extend the last chunk instead
-      if (chunks.length > 0) {
-        chunks[chunks.length - 1] = text.substring(
-          end - targetSize - overlap,
-          text.length
-        )
-      }
       break
     }
   }

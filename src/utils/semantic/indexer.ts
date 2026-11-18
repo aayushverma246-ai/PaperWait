@@ -90,12 +90,16 @@ export async function indexDocument(
       .eq('user_id', userId)
 
     // 5. Chunk the document
-    const chunks = chunkDocument(doc.ocr_text, documentId, doc.file_name)
+    const rawChunks = chunkDocument(doc.ocr_text, documentId, doc.file_name)
 
-    if (chunks.length === 0) {
+    if (rawChunks.length === 0) {
       await upsertIndexStatus(supa, documentId, userId, 'indexed', currentFingerprint, 0)
       return { documentId, status: 'empty', chunksCount: 0 }
     }
+
+    // Limit maximum chunks per document to 50 (~100,000 characters) to ensure fast, bounded indexing
+    const MAX_CHUNKS = 50
+    const chunks = rawChunks.slice(0, MAX_CHUNKS)
 
     // 6. Generate embeddings in batches
     const texts = chunks.map(c => c.text)
